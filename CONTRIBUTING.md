@@ -17,7 +17,7 @@ Thank you for your interest in contributing to LoadSpiker! This document provide
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd load_tests
+cd LoadSpiker
 
 # Install system dependencies
 make install-deps
@@ -35,12 +35,12 @@ make test
 ## Project Structure
 
 ```
-load_tests/
+LoadSpiker/
 ├── src/                    # C source code
 │   ├── engine.c           # Core HTTP engine implementation
 │   ├── engine.h           # Engine header definitions
 │   └── python_extension.c # Python C extension wrapper
-├── LoadSpiker/            # Python package
+├── loadspiker/            # Python package
 │   ├── __init__.py        # Package initialization
 │   ├── engine.py          # High-level Python API
 │   ├── scenarios.py       # Test scenario definitions
@@ -82,7 +82,7 @@ For debugging memory issues and segmentation faults:
 make debug
 
 # Copy debug build to package
-cp obj/loadtest_debug.so LoadSpiker/loadtest.so
+cp obj/loadtest_debug.so loadspiker/loadtest.so
 
 # Run with memory checking (macOS)
 DYLD_INSERT_LIBRARIES=/Library/Developer/CommandLineTools/usr/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib python3 your_test.py

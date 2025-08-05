@@ -22,7 +22,7 @@ sudo apt-get install libcurl4-openssl-dev python3-dev pkg-config
 
 # Install LoadSpiker
 git clone <repository-url>
-cd load_tests
+cd LoadSpiker
 make install-deps
 make install
 ```
@@ -291,7 +291,7 @@ make clean
 make debug
 
 # 2. Copy debug build to package
-cp obj/loadtest_debug.so LoadSpiker/loadtest.so
+cp obj/loadtest_debug.so loadspiker/loadtest.so
 
 # 3. Run with memory debugging (Linux)
 ASAN_OPTIONS=abort_on_error=1:halt_on_error=1 python3 your_test.py
@@ -313,13 +313,13 @@ valgrind --tool=memcheck --leak-check=full python3 your_test.py
 make install
 
 # 2. Set PYTHONPATH manually
-export PYTHONPATH=/path/to/load_tests:$PYTHONPATH
+export PYTHONPATH=/path/to/LoadSpiker:$PYTHONPATH
 
 # 3. Use the activation script
 source activate_env.sh
 
 # 4. Verify the shared library exists
-ls -la LoadSpiker/loadtest.so
+ls -la loadspiker/loadtest.so
 ```
 
 #### Build Failures

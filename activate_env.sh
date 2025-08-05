@@ -1,10 +1,14 @@
 #!/bin/bash
 # LoadSpiker Environment Setup
-export PYTHONPATH="/Users/enzo/src/load_tests:$PYTHONPATH"
-export PATH="/Users/enzo/src/load_tests:$PATH"
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+export PATH="$SCRIPT_DIR:$PATH"
 
 echo "🚀 LoadSpiker environment activated"
-echo "   PYTHONPATH includes: /Users/enzo/src/load_tests"
+echo "   PYTHONPATH includes: $SCRIPT_DIR"
 echo "   You can now run: python3 cli.py [args]"
 echo "   Or import loadspiker in Python scripts"
 

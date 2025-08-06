@@ -35,13 +35,13 @@ make install
 
 ```bash
 # Quick URL test
-loadspiker https://httpbin.org/get -u 10 -d 30
+python3 cli.py https://httpbin.org/get -u 10 -d 30
 
 # Interactive mode
-loadspiker -i
+python3 cli.py -i
 
 # Advanced load pattern
-loadspiker https://api.example.com -p "ramp:1:50:60" --html report.html
+python3 cli.py https://api.example.com -p "ramp:1:50:60" --html report.html
 ```
 
 ### Python API
@@ -182,23 +182,23 @@ reporter.end_reporting()
 ```
 
 ```bash
-LoadSpiker -c config.json -u 20 -d 60
+python3 cli.py -c config.json -u 20 -d 60
 ```
 
 ### Python Scenario Files
 
 ```python
 # scenario.py
-from LoadSpiker import Scenario
+from loadspiker import Scenario
+from loadspiker.scenarios import HTTPRequest
 
 scenario = Scenario("Custom Test")
-scenario.get("${BASE_URL}/endpoint1")
-scenario.post("${BASE_URL}/endpoint2", body='{"data": "test"}')
-scenario.set_variable("BASE_URL", "https://api.example.com")
+scenario.add_request(HTTPRequest("https://api.example.com/endpoint1", "GET"))
+scenario.add_request(HTTPRequest("https://api.example.com/endpoint2", "POST", body='{"data": "test"}'))
 ```
 
 ```bash
-LoadSpiker -s scenario.py -u 30 -d 90
+python3 cli.py -s scenario.py -u 30 -d 90
 ```
 
 ## Performance Benchmarks
@@ -307,23 +307,23 @@ DYLD_INSERT_LIBRARIES=/Library/Developer/CommandLineTools/usr/lib/clang/17/lib/d
 valgrind --tool=memcheck --leak-check=full python3 your_test.py
 ```
 
-#### Import Error: No module named 'loadtest'
+#### Import Error: No module named 'loadspiker'
 
-**Symptoms**: `ImportError: No module named 'loadtest'` when running Python scripts.
+**Symptoms**: `ImportError: No module named 'loadspiker'` when running Python scripts.
 
 **Solutions**:
 ```bash
-# 1. Ensure proper installation
-make install
-
-# 2. Set PYTHONPATH manually
+# 1. Set PYTHONPATH manually
 export PYTHONPATH=/path/to/LoadSpiker:$PYTHONPATH
 
-# 3. Use the activation script
+# 2. Use the activation script
 source activate_env.sh
 
-# 4. Verify the shared library exists
-ls -la loadspiker/loadtest.so
+# 3. Verify the shared library exists
+ls -la loadspiker/_c_ext/loadspiker_c.so
+
+# 4. Install in development mode (requires virtual environment)
+python3 -m pip install -e .
 ```
 
 #### Build Failures
@@ -394,7 +394,7 @@ Enable debug mode for detailed logging and error information:
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-from LoadSpiker import Engine
+from loadspiker import Engine
 engine = Engine(max_connections=10, worker_threads=2)  # Use smaller values for debugging
 ```
 

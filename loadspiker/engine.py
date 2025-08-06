@@ -2,33 +2,43 @@
 High-level Python API for the load testing engine
 """
 
-# Import the C extension module directly
+# Import standard libraries
 import sys
 import os
 import importlib.util
+import time
+from typing import List, Dict, Any, Optional, Callable
 
-# Load the C extension directly from the .so file
+# Import scenarios FIRST to ensure they're available before C extension loading
+try:
+    from .scenarios import Scenario, RESTAPIScenario, WebsiteScenario, HTTPRequest
+    from .reporters import ConsoleReporter, JSONReporter, HTMLReporter
+    from .utils import ramp_up, constant_load
+    _python_modules_available = True
+except ImportError as e:
+    print(f"Warning: Python modules not available: {e}")
+    # Create placeholders for scenarios if not available
+    class Scenario:
+        def build_requests(self):
+            return []
+    class RESTAPIScenario(Scenario):
+        pass
+    class WebsiteScenario(Scenario):
+        pass
+    _python_modules_available = False
+
+# Now load the C extension from the _c_ext subdirectory
 current_dir = os.path.dirname(__file__)
-so_path = os.path.join(current_dir, "loadspiker.so")
+so_path = os.path.join(current_dir, "_c_ext", "loadspiker_c.so")
 
 try:
+    # Use the correct module name that matches the C extension's PyInit function
     spec = importlib.util.spec_from_file_location("loadspiker", so_path)
     _loadspiker_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(_loadspiker_module)
     _CEngine = _loadspiker_module.Engine
 except Exception as e:
     raise ImportError(f"Could not import LoadSpiker C extension from {so_path}: {e}")
-import time
-from typing import List, Dict, Any, Optional, Callable
-
-# Import scenarios - handle import error gracefully for now
-try:
-    from .scenarios import Scenario
-except ImportError:
-    # Create a placeholder for scenarios if not available
-    class Scenario:
-        def build_requests(self):
-            return []
 
 
 class Engine:

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="LoadSpiker logo" width="300"/>
+</p>
+
 # LoadSpiker
 
 A high-performance load testing tool with a C engine and Python scripting interface, designed to compete with tools like Gatling and JMeter.

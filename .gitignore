@@ -1,7 +1,36 @@
+# Python bytecode
+*.pyc
+*.pyo
 *.cpython-*.pyc
+*.py[cod]
+*$py.class
 
+# Compiled C extensions
 *.so
 
+# Python cache directories
 */*/*/__pycache__/
 */*/__pycache__/
 */__pycache__/
+__pycache__/
+
+# Build artifacts
+obj/
+build/
+dist/
+*.egg-info/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*.html
+test_*.json
+*.log

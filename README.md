@@ -16,6 +16,7 @@ A high-performance load testing tool with a C engine and Python scripting interf
 - **REST API Testing**: Built-in support for REST API testing scenarios
 - **Website Testing**: Realistic user behavior simulation for web applications
 - **Advanced Assertions**: Comprehensive assertion system for response validation
+- **Data-Driven Testing**: CSV file support for parameterized load testing with multiple distribution strategies
 
 ## Quick Start
 
@@ -181,6 +182,40 @@ for users, duration in spike_test(20, 100, 60, 30):
 # Stress testing
 for users, duration in stress_test(200, step_size=20):
     engine.run_scenario(scenario, users, duration)
+```
+
+### Data-Driven Testing with CSV
+
+```python
+from loadspiker import Engine, Scenario
+from loadspiker.data_sources import load_csv_data, get_user_data
+
+# Load CSV data for parameterized testing
+load_csv_data("users.csv", strategy="sequential")
+
+engine = Engine(max_connections=100)
+scenario = Scenario("User Login Test")
+
+# CSV file format: username,password,email,user_id,subscription_type
+# Data is automatically distributed among virtual users
+
+def user_login(user_id):
+    user_data = get_user_data(user_id)
+    return scenario.post("/api/login", body=f'''{{
+        "username": "{user_data['username']}",
+        "password": "{user_data['password']}"
+    }}''')
+
+# Or use built-in scenario CSV support with variable substitution
+scenario.load_data_file("users.csv", strategy="sequential")
+scenario.post("/api/login", body='{"username": "${data.username}", "password": "${data.password}"}')
+
+# Multiple CSV files for complex scenarios
+scenario.load_data_file("users.csv", name="users", strategy="sequential")
+scenario.load_data_file("products.csv", name="products", strategy="random")
+scenario.post("/api/order", body='{"user_id": "${users.user_id}", "product_id": "${products.product_id}"}')
+
+results = engine.run_scenario(scenario, users=20, duration=60)
 ```
 
 ### Advanced Reporting

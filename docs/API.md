@@ -6,6 +6,7 @@ This document provides comprehensive API documentation for LoadSpiker's Python i
 
 - [Engine](#engine)
 - [Scenarios](#scenarios)
+- [Assertions](#assertions)
 - [Reporters](#reporters)
 - [Utilities](#utilities)
 
@@ -166,6 +167,330 @@ scenario.get("https://api.example.com/users")
 scenario.post("https://api.example.com/users", body='{"name": "Test"}')
 scenario.put("https://api.example.com/users/1", body='{"name": "Updated"}')
 scenario.delete("https://api.example.com/users/1")
+```
+
+## Assertions
+
+The LoadSpiker assertion system provides comprehensive response validation capabilities for load testing scenarios.
+
+### Core Assertion Classes
+
+#### StatusCodeAssertion
+
+Validates HTTP status codes against expected values.
+
+```python
+StatusCodeAssertion(expected_status: int, message: str = "")
+```
+
+**Parameters:**
+- `expected_status` (int): Expected HTTP status code
+- `message` (str): Custom error message for assertion failures
+
+**Example:**
+```python
+from loadspiker.assertions import StatusCodeAssertion
+
+assertion = StatusCodeAssertion(200, "Expected successful response")
+success = assertion.check(response)
+```
+
+#### ResponseTimeAssertion
+
+Validates response time is within acceptable limits.
+
+```python
+ResponseTimeAssertion(max_time_ms: int, message: str = "")
+```
+
+**Parameters:**
+- `max_time_ms` (int): Maximum acceptable response time in milliseconds
+- `message` (str): Custom error message for assertion failures
+
+#### BodyContainsAssertion
+
+Validates that response body contains specific text.
+
+```python
+BodyContainsAssertion(expected_text: str, case_sensitive: bool = True, message: str = "")
+```
+
+**Parameters:**
+- `expected_text` (str): Text that should be present in response body
+- `case_sensitive` (bool): Whether search should be case sensitive
+- `message` (str): Custom error message for assertion failures
+
+#### RegexAssertion
+
+Validates response body against regular expression patterns.
+
+```python
+RegexAssertion(pattern: str, message: str = "")
+```
+
+**Parameters:**
+- `pattern` (str): Regular expression pattern to match
+- `message` (str): Custom error message for assertion failures
+
+#### JSONPathAssertion
+
+Validates JSON responses using JSONPath-like syntax.
+
+```python
+JSONPathAssertion(path: str, expected_value: Any = None, exists: bool = True, message: str = "")
+```
+
+**Parameters:**
+- `path` (str): JSONPath to validate (e.g., "user.name", "items[0].id")
+- `expected_value` (Any): Expected value at the path (optional)
+- `exists` (bool): Whether the path should exist
+- `message` (str): Custom error message for assertion failures
+
+**Example:**
+```python
+from loadspiker.assertions import JSONPathAssertion
+
+# Check if user.id exists
+id_assertion = JSONPathAssertion("user.id", exists=True)
+
+# Check if user.name equals "John"
+name_assertion = JSONPathAssertion("user.name", "John")
+
+# Check array element
+item_assertion = JSONPathAssertion("items[0].price", 29.99)
+```
+
+#### HeaderAssertion
+
+Validates HTTP response headers.
+
+```python
+HeaderAssertion(header_name: str, expected_value: str = None, exists: bool = True, message: str = "")
+```
+
+**Parameters:**
+- `header_name` (str): Name of the header to check
+- `expected_value` (str): Expected header value (optional)
+- `exists` (bool): Whether the header should exist
+- `message` (str): Custom error message for assertion failures
+
+#### CustomAssertion
+
+Allows custom validation logic using user-defined functions.
+
+```python
+CustomAssertion(assertion_func: Callable[[Dict[str, Any]], bool], message: str = "")
+```
+
+**Parameters:**
+- `assertion_func` (Callable): Function that takes response dict and returns bool
+- `message` (str): Custom error message for assertion failures
+
+**Example:**
+```python
+from loadspiker.assertions import CustomAssertion
+
+def check_response_size(response):
+    body_size = len(response.get('body', ''))
+    return 100 < body_size < 10000
+
+size_assertion = CustomAssertion(check_response_size, "Response size should be reasonable")
+```
+
+### Assertion Groups
+
+#### AssertionGroup
+
+Groups multiple assertions with AND/OR logic.
+
+```python
+AssertionGroup(logic: str = "AND")
+```
+
+**Parameters:**
+- `logic` (str): Logic operator ("AND" or "OR")
+
+**Methods:**
+
+##### add
+
+```python
+add(assertion: Assertion) -> AssertionGroup
+```
+
+Add an assertion to the group.
+
+##### check_all
+
+```python
+check_all(response: Dict[str, Any]) -> bool
+```
+
+Check all assertions in the group according to the logic operator.
+
+##### get_failure_report
+
+```python
+get_failure_report() -> str
+```
+
+Get detailed failure report for failed assertions.
+
+**Example:**
+```python
+from loadspiker.assertions import AssertionGroup, status_is, response_time_under, body_contains
+
+# AND group - all must pass
+and_group = AssertionGroup("AND")
+and_group.add(status_is(200))
+and_group.add(response_time_under(1000))
+and_group.add(body_contains("success"))
+
+success = and_group.check_all(response)
+if not success:
+    print(and_group.get_failure_report())
+
+# OR group - at least one must pass
+or_group = AssertionGroup("OR")
+or_group.add(status_is(200))
+or_group.add(status_is(201))
+or_group.add(status_is(202))
+```
+
+### Convenience Functions
+
+LoadSpiker provides convenience functions for creating common assertions quickly:
+
+#### status_is
+
+```python
+status_is(code: int, message: str = "") -> StatusCodeAssertion
+```
+
+Create a status code assertion.
+
+#### response_time_under
+
+```python
+response_time_under(max_ms: int, message: str = "") -> ResponseTimeAssertion
+```
+
+Create a response time assertion.
+
+#### body_contains
+
+```python
+body_contains(text: str, case_sensitive: bool = True, message: str = "") -> BodyContainsAssertion
+```
+
+Create a body content assertion.
+
+#### body_matches
+
+```python
+body_matches(pattern: str, message: str = "") -> RegexAssertion
+```
+
+Create a regex pattern assertion.
+
+#### json_path
+
+```python
+json_path(path: str, expected_value: Any = None, exists: bool = True, message: str = "") -> JSONPathAssertion
+```
+
+Create a JSON path assertion.
+
+#### header_exists
+
+```python
+header_exists(name: str, value: str = None, message: str = "") -> HeaderAssertion
+```
+
+Create a header assertion.
+
+#### custom_assertion
+
+```python
+custom_assertion(func: Callable[[Dict[str, Any]], bool], message: str = "") -> CustomAssertion
+```
+
+Create a custom assertion.
+
+### Running Assertions
+
+#### run_assertions
+
+```python
+run_assertions(response: Dict[str, Any], assertions: List[Assertion], fail_fast: bool = True) -> Tuple[bool, List[str]]
+```
+
+Run a list of assertions against a response.
+
+**Parameters:**
+- `response` (Dict[str, Any]): HTTP response dictionary
+- `assertions` (List[Assertion]): List of assertions to check
+- `fail_fast` (bool): Stop on first failure if True
+
+**Returns:**
+- Tuple of (success: bool, failure_messages: List[str])
+
+**Example:**
+```python
+from loadspiker import Engine
+from loadspiker.assertions import (
+    status_is, response_time_under, json_path, body_contains, run_assertions
+)
+
+engine = Engine()
+response = engine.execute_request("https://api.example.com/users/123")
+
+assertions = [
+    status_is(200, "Expected successful response"),
+    response_time_under(1000, "Response should be under 1 second"),
+    json_path("user.id", 123),
+    json_path("user.email", exists=True),
+    body_contains("user")
+]
+
+success, failures = run_assertions(response, assertions)
+
+if not success:
+    print("Assertion failures:")
+    for failure in failures:
+        print(f"  - {failure}")
+else:
+    print("All assertions passed!")
+```
+
+### Integration with Scenarios
+
+Assertions can be integrated with scenario systems for automated testing:
+
+```python
+from loadspiker import Engine, Scenario
+from loadspiker.assertions import status_is, json_path, response_time_under
+
+engine = Engine()
+scenario = Scenario("User API Test")
+
+# Add requests with assertions to scenario
+scenario.get("https://api.example.com/users", assertions=[
+    status_is(200),
+    response_time_under(500),
+    json_path("users", exists=True)
+])
+
+scenario.post("https://api.example.com/users", 
+              body='{"name": "Test User"}',
+              assertions=[
+                  status_is(201),
+                  json_path("user.id", exists=True),
+                  json_path("user.name", "Test User")
+              ])
+
+# Run scenario with assertions
+results = engine.run_scenario(scenario, users=10, duration=60)
 ```
 
 ## Reporters

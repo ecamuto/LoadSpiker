@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Comprehensive Assertion System**: Full-featured assertion framework for response validation
+  - Status code assertions (`status_is`, `StatusCodeAssertion`)
+  - Response time validation (`response_time_under`, `ResponseTimeAssertion`)
+  - Body content checking (`body_contains`, `BodyContainsAssertion`)
+  - Regular expression matching (`body_matches`, `RegexAssertion`)
+  - JSON path validation (`json_path`, `JSONPathAssertion`)
+  - HTTP header verification (`header_exists`, `HeaderAssertion`)
+  - Custom assertion support (`custom_assertion`, `CustomAssertion`)
+  - Assertion groups with AND/OR logic (`AssertionGroup`)
+  - Detailed error reporting with specific failure messages
+  - Integration with scenario system for automated testing
 - Comprehensive contributing guidelines (CONTRIBUTING.md)
 - Debug build configuration with AddressSanitizer support
 - Detailed troubleshooting documentation

@@ -15,6 +15,7 @@ A high-performance load testing tool with a C engine and Python scripting interf
 - **Flexible Load Patterns**: Constant load, ramp-up, spike testing, and custom patterns
 - **REST API Testing**: Built-in support for REST API testing scenarios
 - **Website Testing**: Realistic user behavior simulation for web applications
+- **Advanced Assertions**: Comprehensive assertion system for response validation
 
 ## Quick Start
 
@@ -62,6 +63,36 @@ results = engine.run_scenario(scenario, users=10, duration=60)
 print(f"RPS: {results['requests_per_second']:.2f}")
 ```
 
+### Advanced Assertions
+
+```python
+from loadspiker import Engine
+from loadspiker.assertions import (
+    status_is, response_time_under, body_contains, json_path, 
+    header_exists, run_assertions
+)
+
+engine = Engine(max_connections=50, worker_threads=4)
+
+# Execute request
+response = engine.execute_request("https://api.example.com/users/123")
+
+# Define assertions
+assertions = [
+    status_is(200, "Expected successful response"),
+    response_time_under(1000, "Response should be under 1 second"),
+    json_path("user.id", 123, message="User ID should match"),
+    json_path("user.email", exists=True),
+    header_exists("content-type", "application/json"),
+    body_contains("user")
+]
+
+# Run assertions
+success, failures = run_assertions(response, assertions)
+if not success:
+    print("Assertion failures:", failures)
+```
+
 ## Architecture
 
 ```
@@ -90,14 +121,30 @@ print(f"RPS: {results['requests_per_second']:.2f}")
 
 ```python
 from loadspiker import Engine, RESTAPIScenario
+from loadspiker.assertions import status_is, json_path, response_time_under
 
 engine = Engine(max_connections=200)
 scenario = RESTAPIScenario("https://api.example.com")
 
-scenario.get_resource("users")
-scenario.create_resource("users", {"name": "Test User"})
-scenario.update_resource("users/1", {"name": "Updated User"})
-scenario.delete_resource("users/1")
+# Add requests with assertions
+scenario.get_resource("users", assertions=[
+    status_is(200),
+    json_path("users", exists=True),
+    response_time_under(500)
+])
+
+scenario.create_resource("users", {"name": "Test User"}, assertions=[
+    status_is(201),
+    json_path("user.id", exists=True),
+    json_path("user.name", "Test User")
+])
+
+scenario.update_resource("users/1", {"name": "Updated User"}, assertions=[
+    status_is(200),
+    json_path("user.name", "Updated User")
+])
+
+scenario.delete_resource("users/1", assertions=[status_is(204)])
 
 results = engine.run_scenario(scenario, users=25, duration=60)
 ```

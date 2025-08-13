@@ -1,0 +1,6 @@
+username,password,email,user_id,subscription_type
+alice,secret123,alice@example.com,1001,premium
+bob,password456,bob@example.com,1002,basic
+charlie,mypass789,charlie@example.com,1003,premium
+diana,secure321,diana@example.com,1004,basic
+eve,strongpass,eve@example.com,1005,premium

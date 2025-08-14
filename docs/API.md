@@ -7,6 +7,7 @@ This document provides comprehensive API documentation for LoadSpiker's Python i
 - [Engine](#engine)
 - [Scenarios](#scenarios)
 - [Assertions](#assertions)
+- [Performance Assertions](#performance-assertions)
 - [Reporters](#reporters)
 - [Utilities](#utilities)
 
@@ -491,6 +492,436 @@ scenario.post("https://api.example.com/users",
 
 # Run scenario with assertions
 results = engine.run_scenario(scenario, users=10, duration=60)
+```
+
+## Performance Assertions
+
+The LoadSpiker performance assertion system provides comprehensive validation of aggregate performance metrics from load testing scenarios. Unlike regular assertions that validate individual responses, performance assertions evaluate overall test performance against defined thresholds.
+
+### Overview
+
+Performance assertions analyze aggregated metrics such as throughput, response times, error rates, and success rates to determine if a load test meets performance requirements. This enables:
+
+- **SLA Validation**: Ensure your application meets service level agreements
+- **Performance Regression Detection**: Catch performance degradations early
+- **Capacity Planning**: Validate system capacity under load
+- **CI/CD Integration**: Automated performance gates in deployment pipelines
+
+### Core Performance Assertion Classes
+
+#### ThroughputAssertion
+
+Validates that the system maintains a minimum throughput (requests per second).
+
+```python
+ThroughputAssertion(min_rps: float, message: str = "")
+```
+
+**Parameters:**
+- `min_rps` (float): Minimum required requests per second
+- `message` (str): Custom error message for assertion failures
+
+**Example:**
+```python
+from loadspiker.performance_assertions import ThroughputAssertion
+
+# Require at least 100 RPS
+throughput_check = ThroughputAssertion(100.0, "System must handle at least 100 RPS")
+success = throughput_check.check_metrics(metrics)
+```
+
+#### AverageResponseTimeAssertion
+
+Validates that average response time stays below acceptable limits.
+
+```python
+AverageResponseTimeAssertion(max_avg_ms: float, message: str = "")
+```
+
+**Parameters:**
+- `max_avg_ms` (float): Maximum acceptable average response time in milliseconds
+- `message` (str): Custom error message for assertion failures
+
+#### ErrorRateAssertion
+
+Validates that error rate stays below acceptable thresholds.
+
+```python
+ErrorRateAssertion(max_error_rate: float, message: str = "")
+```
+
+**Parameters:**
+- `max_error_rate` (float): Maximum acceptable error rate as a percentage (0-100)
+- `message` (str): Custom error message for assertion failures
+
+#### SuccessRateAssertion
+
+Validates that success rate meets minimum requirements.
+
+```python
+SuccessRateAssertion(min_success_rate: float, message: str = "")
+```
+
+**Parameters:**
+- `min_success_rate` (float): Minimum required success rate as a percentage (0-100)
+- `message` (str): Custom error message for assertion failures
+
+#### MaxResponseTimeAssertion
+
+Validates that maximum response time stays below acceptable limits.
+
+```python
+MaxResponseTimeAssertion(max_time_ms: float, message: str = "")
+```
+
+**Parameters:**
+- `max_time_ms` (float): Maximum acceptable response time in milliseconds
+- `message` (str): Custom error message for assertion failures
+
+#### TotalRequestsAssertion
+
+Validates that a minimum number of requests were processed (useful for ensuring test completion).
+
+```python
+TotalRequestsAssertion(min_requests: int, message: str = "")
+```
+
+**Parameters:**
+- `min_requests` (int): Minimum required number of total requests
+- `message` (str): Custom error message for assertion failures
+
+#### CustomPerformanceAssertion
+
+Allows custom performance validation logic using user-defined functions.
+
+```python
+CustomPerformanceAssertion(assertion_func: Callable[[Dict[str, Any]], bool], message: str = "")
+```
+
+**Parameters:**
+- `assertion_func` (Callable): Function that takes metrics dict and returns bool
+- `message` (str): Custom error message for assertion failures
+
+**Example:**
+```python
+from loadspiker.performance_assertions import CustomPerformanceAssertion
+
+def check_performance_ratio(metrics):
+    """Custom assertion: Check if RPS to avg response time ratio is acceptable"""
+    rps = metrics.get('requests_per_second', 0.0)
+    avg_time = metrics.get('avg_response_time_ms', 0.0)
+    if avg_time == 0:
+        return True
+    ratio = rps / avg_time
+    return ratio > 0.1  # At least 0.1 RPS per ms of response time
+
+ratio_assertion = CustomPerformanceAssertion(
+    check_performance_ratio,
+    "Performance ratio (RPS/avg_response_time) should be > 0.1"
+)
+```
+
+### Performance Assertion Groups
+
+#### PerformanceAssertionGroup
+
+Groups multiple performance assertions with AND/OR logic for complex validation scenarios.
+
+```python
+PerformanceAssertionGroup(logic: str = "AND")
+```
+
+**Parameters:**
+- `logic` (str): Logic operator ("AND" or "OR")
+
+**Methods:**
+
+##### add
+
+```python
+add(assertion: PerformanceAssertion) -> PerformanceAssertionGroup
+```
+
+Add a performance assertion to the group.
+
+##### check_all_metrics
+
+```python
+check_all_metrics(metrics: Dict[str, Any]) -> bool
+```
+
+Check all assertions in the group against metrics according to the logic operator.
+
+##### get_failure_report
+
+```python
+get_failure_report() -> str
+```
+
+Get detailed failure report for failed assertions.
+
+**Example:**
+```python
+from loadspiker.performance_assertions import (
+    PerformanceAssertionGroup, throughput_at_least, 
+    avg_response_time_under, error_rate_below
+)
+
+# AND group - all must pass for production readiness
+production_ready = PerformanceAssertionGroup("AND")
+production_ready.add(throughput_at_least(50.0, "Must handle 50+ RPS"))
+production_ready.add(avg_response_time_under(500.0, "Avg response < 500ms"))
+production_ready.add(error_rate_below(1.0, "Error rate < 1%"))
+
+success = production_ready.check_all_metrics(metrics)
+if not success:
+    print(production_ready.get_failure_report())
+
+# OR group - at least one must pass for basic functionality
+basic_functionality = PerformanceAssertionGroup("OR")
+basic_functionality.add(throughput_at_least(1.0))
+basic_functionality.add(error_rate_below(50.0))
+```
+
+### Convenience Functions
+
+LoadSpiker provides convenience functions for creating common performance assertions:
+
+#### throughput_at_least
+
+```python
+throughput_at_least(min_rps: float, message: str = "") -> ThroughputAssertion
+```
+
+Create a throughput assertion.
+
+#### avg_response_time_under
+
+```python
+avg_response_time_under(max_ms: float, message: str = "") -> AverageResponseTimeAssertion
+```
+
+Create an average response time assertion.
+
+#### error_rate_below
+
+```python
+error_rate_below(max_rate: float, message: str = "") -> ErrorRateAssertion
+```
+
+Create an error rate assertion.
+
+#### success_rate_at_least
+
+```python
+success_rate_at_least(min_rate: float, message: str = "") -> SuccessRateAssertion
+```
+
+Create a success rate assertion.
+
+#### max_response_time_under
+
+```python
+max_response_time_under(max_ms: float, message: str = "") -> MaxResponseTimeAssertion
+```
+
+Create a maximum response time assertion.
+
+#### total_requests_at_least
+
+```python
+total_requests_at_least(min_requests: int, message: str = "") -> TotalRequestsAssertion
+```
+
+Create a total requests assertion.
+
+#### custom_performance_assertion
+
+```python
+custom_performance_assertion(func: Callable[[Dict[str, Any]], bool], message: str = "") -> CustomPerformanceAssertion
+```
+
+Create a custom performance assertion.
+
+### Running Performance Assertions
+
+#### run_performance_assertions
+
+```python
+run_performance_assertions(
+    metrics: Dict[str, Any], 
+    assertions: List[PerformanceAssertion], 
+    fail_fast: bool = True
+) -> Tuple[bool, List[str]]
+```
+
+Run a list of performance assertions against metrics.
+
+**Parameters:**
+- `metrics` (Dict[str, Any]): Performance metrics dictionary from load test
+- `assertions` (List[PerformanceAssertion]): List of performance assertions to check
+- `fail_fast` (bool): Stop on first failure if True
+
+**Returns:**
+- Tuple of (success: bool, failure_messages: List[str])
+
+### Complete Example
+
+Here's a comprehensive example showing how to use performance assertions with load testing:
+
+```python
+from loadspiker import Engine, Scenario
+from loadspiker.performance_assertions import (
+    throughput_at_least, avg_response_time_under, error_rate_below,
+    success_rate_at_least, max_response_time_under, total_requests_at_least,
+    PerformanceAssertionGroup, run_performance_assertions
+)
+
+# Create engine and scenario
+engine = Engine(max_connections=100, worker_threads=8)
+scenario = Scenario("API Performance Test")
+scenario.get("https://api.example.com/users")
+scenario.post("https://api.example.com/users", body='{"name": "Test User"}')
+
+# Run load test
+print("Running load test...")
+results = engine.run_scenario(scenario, users=50, duration=120)
+
+# Define performance requirements
+performance_requirements = [
+    throughput_at_least(10.0, "Must handle at least 10 requests per second"),
+    avg_response_time_under(1000.0, "Average response time must be under 1 second"),
+    max_response_time_under(5000.0, "Maximum response time must be under 5 seconds"),
+    error_rate_below(5.0, "Error rate must be below 5%"),
+    success_rate_at_least(95.0, "Success rate must be at least 95%"),
+    total_requests_at_least(100, "Test must process at least 100 requests")
+]
+
+# Check performance requirements
+print("\nValidating performance requirements...")
+success, failures = run_performance_assertions(results, performance_requirements)
+
+if success:
+    print("✅ All performance requirements met!")
+    print(f"Throughput: {results['requests_per_second']:.2f} RPS")
+    print(f"Average Response Time: {results['avg_response_time_ms']:.2f}ms")
+    print(f"Error Rate: {(results['failed_requests']/results['total_requests']*100):.2f}%")
+else:
+    print("❌ Performance requirements not met:")
+    for failure in failures:
+        print(f"  - {failure}")
+
+# Advanced example with assertion groups
+print("\nChecking production readiness...")
+
+# Production-ready criteria (all must pass)
+production_criteria = PerformanceAssertionGroup("AND")
+production_criteria.add(throughput_at_least(25.0, "Production needs 25+ RPS"))
+production_criteria.add(avg_response_time_under(500.0, "Production needs <500ms avg"))
+production_criteria.add(error_rate_below(1.0, "Production needs <1% errors"))
+
+# Basic functionality criteria (at least one must pass)
+basic_criteria = PerformanceAssertionGroup("OR")
+basic_criteria.add(throughput_at_least(1.0, "Basic: at least 1 RPS"))
+basic_criteria.add(success_rate_at_least(50.0, "Basic: at least 50% success"))
+
+prod_ready = production_criteria.check_all_metrics(results)
+basic_working = basic_criteria.check_all_metrics(results)
+
+print(f"Production Ready: {'✅' if prod_ready else '❌'}")
+print(f"Basic Functionality: {'✅' if basic_working else '❌'}")
+
+if not prod_ready:
+    print("\nProduction readiness issues:")
+    print(production_criteria.get_failure_report())
+```
+
+### Metrics Dictionary Format
+
+Performance assertions expect metrics in the following format:
+
+```python
+metrics = {
+    'total_requests': int,           # Total number of requests made
+    'successful_requests': int,      # Number of successful requests (2xx/3xx status)
+    'failed_requests': int,          # Number of failed requests (4xx/5xx/timeouts)
+    'requests_per_second': float,    # Current throughput (RPS)
+    'avg_response_time_ms': float,   # Average response time in milliseconds
+    'max_response_time_us': int,     # Maximum response time in microseconds
+    'min_response_time_us': int      # Minimum response time in microseconds (optional)
+}
+```
+
+### Best Practices
+
+#### Setting Realistic Thresholds
+
+1. **Baseline Testing**: Run initial tests to understand current performance
+2. **SLA Alignment**: Set thresholds based on actual SLA requirements
+3. **Environment Considerations**: Adjust thresholds for test vs production environments
+4. **Gradual Tightening**: Start with loose thresholds and tighten over time
+
+#### Combining Assertions
+
+```python
+# Common patterns for different scenarios
+
+# High-performance API requirements
+api_performance = [
+    throughput_at_least(100.0),
+    avg_response_time_under(200.0),
+    error_rate_below(0.1),
+    max_response_time_under(1000.0)
+]
+
+# Basic web application requirements
+web_performance = [
+    throughput_at_least(10.0),
+    avg_response_time_under(2000.0),
+    error_rate_below(5.0),
+    success_rate_at_least(95.0)
+]
+
+# Stress test validation (ensuring graceful degradation)
+stress_test_validation = [
+    error_rate_below(20.0),  # Allow higher error rates under stress
+    total_requests_at_least(1000),  # Ensure test actually ran
+    # Custom assertion for graceful degradation
+    custom_performance_assertion(
+        lambda m: m.get('avg_response_time_ms', 0) < m.get('max_response_time_us', 0) / 1000 * 2,
+        "Average response time should not be too close to maximum"
+    )
+]
+```
+
+#### CI/CD Integration
+
+```python
+# Example for CI/CD pipeline integration
+def validate_deployment_performance():
+    """Performance gate for deployment pipeline"""
+    
+    # Run smoke test
+    results = run_smoke_test()
+    
+    # Define deployment criteria
+    deployment_gate = [
+        throughput_at_least(5.0, "Deployment: minimum 5 RPS"),
+        avg_response_time_under(3000.0, "Deployment: avg response < 3s"),
+        error_rate_below(10.0, "Deployment: error rate < 10%"),
+        success_rate_at_least(90.0, "Deployment: success rate >= 90%")
+    ]
+    
+    success, failures = run_performance_assertions(results, deployment_gate)
+    
+    if not success:
+        print("🚫 Deployment blocked due to performance issues:")
+        for failure in failures:
+            print(f"   {failure}")
+        return False
+    
+    print("✅ Performance gate passed - deployment approved")
+    return True
 ```
 
 ## Reporters

@@ -43,6 +43,17 @@ else:
         "json_path", "header_exists", "custom_assertion", "run_assertions"
     ]
 
+# Add performance assertion items to __all__ if they were imported
+if 'PerformanceAssertion' in globals():
+    __all__.extend([
+        "PerformanceAssertion", "ThroughputAssertion", "AverageResponseTimeAssertion",
+        "ErrorRateAssertion", "MaxResponseTimeAssertion", "SuccessRateAssertion",
+        "TotalRequestsAssertion", "CustomPerformanceAssertion", "PerformanceAssertionGroup",
+        "throughput_at_least", "avg_response_time_under", "error_rate_below",
+        "success_rate_at_least", "max_response_time_under", "total_requests_at_least",
+        "custom_performance_assertion", "run_performance_assertions"
+    ])
+
 __version__ = "1.0.0"
 
 # Note: Engine methods may vary depending on which class is loaded

@@ -1060,6 +1060,41 @@ except ImportError as e:
     print(f"Module import error: {e}")
 ```
 
+## Testing
+
+### Comprehensive Test Suite
+
+LoadSpiker includes an exhaustive pytest-based test suite for performance assertions with **99 comprehensive tests** covering all functionality:
+
+#### Running Tests
+```bash
+# Install pytest (if not already installed)
+pip install pytest
+
+# Run the complete performance assertion test suite
+python -m pytest tests/test_performance_assertions.py -v
+
+# Expected output: 99 tests passed
+```
+
+#### Test Coverage
+- **Base Class Testing (6 tests)**: Initialization, error handling, abstract methods
+- **Individual Assertion Testing (42 tests)**: All 7 assertion types with pass/fail scenarios
+- **Group Logic Testing (10 tests)**: AND/OR logic, chaining, failure reporting
+- **Convenience Functions Testing (7 tests)**: Helper function validation
+- **Batch Processing Testing (6 tests)**: `run_performance_assertions` with various options
+- **Edge Cases Testing (6 tests)**: Large/small numbers, None values, float precision
+- **Integration Scenarios Testing (6 tests)**: Real-world use cases and workflows
+
+#### Test Categories
+
+**Regression Testing**: Protects against future code changes
+**Production Scenarios**: SLA validation, deployment gates, stress testing
+**Error Handling**: None values, missing keys, invalid inputs
+**Performance**: Boundary conditions, edge cases
+
+The test suite serves as both validation and executable documentation, demonstrating proper usage patterns and expected behaviors for all performance assertion features.
+
 ## Best Practices
 
 ### Performance Tips

@@ -73,8 +73,8 @@ class ErrorRateAssertion(PerformanceAssertion):
         self.max_error_rate = max_error_rate
     
     def check_metrics(self, metrics: Dict[str, Any]) -> bool:
-        total_requests = metrics.get('total_requests', 0)
-        failed_requests = metrics.get('failed_requests', 0)
+        total_requests = metrics.get('total_requests', 0) or 0
+        failed_requests = metrics.get('failed_requests', 0) or 0
         
         if total_requests == 0:
             return True  # No requests means no errors
@@ -83,8 +83,8 @@ class ErrorRateAssertion(PerformanceAssertion):
         return error_rate <= self.max_error_rate
     
     def get_metrics_error_message(self, metrics: Dict[str, Any]) -> str:
-        total_requests = metrics.get('total_requests', 0)
-        failed_requests = metrics.get('failed_requests', 0)
+        total_requests = metrics.get('total_requests', 0) or 0
+        failed_requests = metrics.get('failed_requests', 0) or 0
         
         if total_requests == 0:
             error_rate = 0.0
@@ -122,8 +122,8 @@ class SuccessRateAssertion(PerformanceAssertion):
         self.min_success_rate = min_success_rate
     
     def check_metrics(self, metrics: Dict[str, Any]) -> bool:
-        total_requests = metrics.get('total_requests', 0)
-        successful_requests = metrics.get('successful_requests', 0)
+        total_requests = metrics.get('total_requests', 0) or 0
+        successful_requests = metrics.get('successful_requests', 0) or 0
         
         if total_requests == 0:
             return True  # No requests means 100% success rate
@@ -132,8 +132,8 @@ class SuccessRateAssertion(PerformanceAssertion):
         return success_rate >= self.min_success_rate
     
     def get_metrics_error_message(self, metrics: Dict[str, Any]) -> str:
-        total_requests = metrics.get('total_requests', 0)
-        successful_requests = metrics.get('successful_requests', 0)
+        total_requests = metrics.get('total_requests', 0) or 0
+        successful_requests = metrics.get('successful_requests', 0) or 0
         
         if total_requests == 0:
             success_rate = 100.0

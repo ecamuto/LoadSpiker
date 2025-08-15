@@ -1,1 +1,1 @@
-pkgconfig>=1.5.0
+pkgconfig>=1.5.0pytest

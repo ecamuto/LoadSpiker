@@ -8,6 +8,21 @@ from .engine import Engine
 # Import assertions system (always available)
 from .assertions import *
 
+# Import performance assertions (standalone, always available)
+try:
+    from .performance_assertions import (
+        PerformanceAssertion, ThroughputAssertion, AverageResponseTimeAssertion,
+        ErrorRateAssertion, MaxResponseTimeAssertion, SuccessRateAssertion,
+        TotalRequestsAssertion, CustomPerformanceAssertion, PerformanceAssertionGroup,
+        throughput_at_least, avg_response_time_under, error_rate_below,
+        success_rate_at_least, max_response_time_under, total_requests_at_least,
+        custom_performance_assertion, run_performance_assertions
+    )
+    _performance_assertions_available = True
+except ImportError as e:
+    print(f"Warning: Performance assertions not available: {e}")
+    _performance_assertions_available = False
+
 # Import the classes that are now loaded in engine.py
 from .engine import _python_modules_available
 

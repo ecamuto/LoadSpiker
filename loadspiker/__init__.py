@@ -13,6 +13,27 @@ if _loadspiker_dir not in sys.path:
 # Import the Python wrapper Engine class explicitly
 from .engine import Engine
 
+# Import assertions system (always available)
+from .assertions import *
+
+# Import performance assertions (standalone, always available)
+try:
+    from .performance_assertions import (
+        PerformanceAssertion, ThroughputAssertion, AverageResponseTimeAssertion,
+        ErrorRateAssertion, MaxResponseTimeAssertion, SuccessRateAssertion,
+        TotalRequestsAssertion, CustomPerformanceAssertion, PerformanceAssertionGroup,
+        throughput_at_least, avg_response_time_under, error_rate_below,
+        success_rate_at_least, max_response_time_under, total_requests_at_least,
+        custom_performance_assertion, run_performance_assertions
+    )
+    _performance_assertions_available = True
+except ImportError as e:
+    print(f"Warning: Performance assertions not available: {e}")
+    _performance_assertions_available = False
+
+# Import the classes that are now loaded in engine.py
+from .engine import _python_modules_available
+
 # Import data sources with fallback
 try:
     from .data_sources import DataManager, DataStrategy, CSVDataSource, load_csv_data, get_user_data
@@ -133,6 +154,17 @@ if 'Assertion' in globals():
         "HeaderAssertion", "CustomAssertion", "AssertionGroup",
         "status_is", "response_time_under", "body_contains", "body_matches",
         "json_path", "header_exists", "custom_assertion", "run_assertions"
+    ])
+
+# Add performance assertion items to __all__ if they were imported
+if 'PerformanceAssertion' in globals():
+    __all__.extend([
+        "PerformanceAssertion", "ThroughputAssertion", "AverageResponseTimeAssertion",
+        "ErrorRateAssertion", "MaxResponseTimeAssertion", "SuccessRateAssertion",
+        "TotalRequestsAssertion", "CustomPerformanceAssertion", "PerformanceAssertionGroup",
+        "throughput_at_least", "avg_response_time_under", "error_rate_below",
+        "success_rate_at_least", "max_response_time_under", "total_requests_at_least",
+        "custom_performance_assertion", "run_performance_assertions"
     ])
 
 __version__ = "1.0.0"

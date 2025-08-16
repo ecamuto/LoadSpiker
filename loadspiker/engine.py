@@ -50,11 +50,21 @@ current_dir = os.path.dirname(__file__)
 so_path = os.path.join(current_dir, "_c_ext", "loadspiker_c.so")
 
 try:
-    # Use the correct module name that matches the C extension's PyInit function
+    # Load the C extension with the original module name but assign to different namespace
     spec = importlib.util.spec_from_file_location("loadspiker", so_path)
     _loadspiker_module = importlib.util.module_from_spec(spec)
+    
+    # Clear any existing loadspiker module from sys.modules to avoid conflicts
+    if "loadspiker" in sys.modules:
+        del sys.modules["loadspiker"]
+    
     spec.loader.exec_module(_loadspiker_module)
     _CEngine = _loadspiker_module.Engine
+    
+    # Remove from sys.modules again to prevent package conflicts
+    if "loadspiker" in sys.modules:
+        del sys.modules["loadspiker"]
+        
 except Exception as e:
     raise ImportError(f"Could not import LoadSpiker C extension from {so_path}: {e}")
 

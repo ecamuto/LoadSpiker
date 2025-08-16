@@ -7,25 +7,43 @@ import sys
 import os
 import importlib.util
 import time
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Union, TYPE_CHECKING
 
-# Import scenarios FIRST to ensure they're available before C extension loading
-try:
-    from .scenarios import Scenario, RESTAPIScenario, WebsiteScenario, HTTPRequest
-    from .reporters import ConsoleReporter, JSONReporter, HTMLReporter
-    from .utils import ramp_up, constant_load
-    _python_modules_available = True
-except ImportError as e:
-    print(f"Warning: Python modules not available: {e}")
-    # Create placeholders for scenarios if not available
-    class Scenario:
-        def build_requests(self):
-            return []
-    class RESTAPIScenario(Scenario):
-        pass
-    class WebsiteScenario(Scenario):
-        pass
-    _python_modules_available = False
+if TYPE_CHECKING:
+    from .scenarios import Scenario
+
+# Use lazy imports to avoid circular dependencies
+_python_modules_available = None
+_scenarios_module = None
+_reporters_module = None
+_utils_module = None
+
+def _get_python_modules():
+    """Lazy import Python modules to avoid circular dependencies"""
+    global _python_modules_available, _scenarios_module, _reporters_module, _utils_module
+    
+    if _python_modules_available is None:
+        try:
+            from . import scenarios as _scenarios_module
+            from . import reporters as _reporters_module
+            from . import utils as _utils_module
+            _python_modules_available = True
+        except ImportError as e:
+            print(f"Warning: Python modules not available: {e}")
+            _python_modules_available = False
+    
+    return _python_modules_available
+
+# Create placeholder classes for when modules aren't available
+class _PlaceholderScenario:
+    def build_requests(self, user_id=0):
+        return []
+
+class _PlaceholderRESTAPIScenario(_PlaceholderScenario):
+    pass
+
+class _PlaceholderWebsiteScenario(_PlaceholderScenario):
+    pass
 
 # Now load the C extension from the _c_ext subdirectory
 current_dir = os.path.dirname(__file__)
@@ -94,7 +112,7 @@ class Engine:
             timeout_ms=timeout_ms
         )
     
-    def run_scenario(self, scenario: Scenario, users: int = 10, 
+    def run_scenario(self, scenario: "Scenario", users: int = 10, 
                     duration: int = 60, ramp_up_duration: int = 0) -> Dict[str, Any]:
         """
         Run a load test scenario

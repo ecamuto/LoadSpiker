@@ -6,6 +6,40 @@ from typing import List, Dict, Any, Optional, Callable
 import json
 import random
 import time
+import re
+# Import data sources with fallback to avoid circular import issues
+try:
+    from .data_sources import DataManager, DataStrategy
+except ImportError:
+    # Fallback to direct import
+    try:
+        import data_sources
+        DataManager = data_sources.DataManager
+        DataStrategy = data_sources.DataStrategy
+    except ImportError:
+        # Create stubs if import fails
+        class DataManager:
+            def __init__(self):
+                self.data_sources = {}
+            def add_csv_source(self, *args, **kwargs):
+                pass
+            def get_all_user_data(self, user_id):
+                return {}
+            def list_sources(self):
+                return []
+            def get_source_info(self, name=None):
+                return {'total_rows': 0, 'strategy': 'sequential', 'columns': []}
+        
+        class DataStrategy:
+            SEQUENTIAL = "sequential"
+            RANDOM = "random"
+            CIRCULAR = "circular"
+            UNIQUE = "unique"
+            SHARED = "shared"
+            
+            @classmethod
+            def __call__(cls, value):
+                return value
 
 
 class HTTPRequest:
@@ -41,6 +75,7 @@ class Scenario:
         self.setup_func: Optional[Callable] = None
         self.teardown_func: Optional[Callable] = None
         self.variables: Dict[str, Any] = {}
+        self.data_manager = DataManager()
     
     def add_request(self, request: HTTPRequest):
         """Add a request to the scenario"""
@@ -80,6 +115,20 @@ class Scenario:
         """Get a scenario variable"""
         return self.variables.get(name, default)
     
+    def load_data_file(self, file_path: str, name: str = "data", 
+                      strategy: str = "sequential", **options):
+        """Load data file for data-driven testing"""
+        # Convert string strategy to enum - DataStrategy is now available from module imports
+        strategy_enum = DataStrategy(strategy.lower()) if hasattr(DataStrategy, '__call__') else strategy.lower()
+        
+        # Add CSV data source
+        self.data_manager.add_csv_source(file_path, name, strategy_enum, **options)
+        return self
+    
+    def get_data_info(self, source_name: str = None) -> Dict[str, Any]:
+        """Get information about loaded data"""
+        return self.data_manager.get_source_info(source_name)
+    
     def setup(self, func: Callable):
         """Set setup function to run before scenario"""
         self.setup_func = func
@@ -90,38 +139,55 @@ class Scenario:
         self.teardown_func = func
         return self
     
-    def build_requests(self) -> List[Dict[str, Any]]:
-        """Build requests list for the C engine"""
+    def build_requests(self, user_id: int = 0) -> List[Dict[str, Any]]:
+        """Build requests list for the C engine with user-specific data"""
         if self.setup_func:
             self.setup_func(self)
         
-        # Apply variable substitution
+        # Get user-specific data
+        user_data = {}
+        if self.data_manager.list_sources():
+            user_data = self.data_manager.get_all_user_data(user_id)
+        
+        # Apply variable substitution with user data
         processed_requests = []
         for request in self.requests:
-            processed_request = self._process_request(request)
+            processed_request = self._process_request(request, user_data)
             processed_requests.append(processed_request.to_dict())
         
         return processed_requests
     
-    def _process_request(self, request: HTTPRequest) -> HTTPRequest:
+    def _process_request(self, request: HTTPRequest, user_data: Dict[str, Dict[str, Any]] = None) -> HTTPRequest:
         """Process request with variable substitution"""
-        url = self._substitute_variables(request.url)
-        body = self._substitute_variables(request.body)
+        url = self._substitute_variables(request.url, user_data)
+        body = self._substitute_variables(request.body, user_data)
         
         headers = {}
         for k, v in request.headers.items():
-            headers[k] = self._substitute_variables(v)
+            headers[k] = self._substitute_variables(v, user_data)
         
         return HTTPRequest(url, request.method, headers, body, request.timeout_ms)
     
-    def _substitute_variables(self, text: str) -> str:
+    def _substitute_variables(self, text: str, user_data: Dict[str, Dict[str, Any]] = None) -> str:
         """Substitute variables in text using ${var} syntax"""
-        import re
-        
+        if not text:
+            return text
+            
         def replace_var(match):
             var_name = match.group(1)
+            
+            # Check for data source variables (e.g., ${data.username}, ${users.email})
+            if user_data and '.' in var_name:
+                source_name, field_name = var_name.split('.', 1)
+                if source_name in user_data and field_name in user_data[source_name]:
+                    value = user_data[source_name][field_name]
+                    return str(value) if value is not None else ""
+            
+            # Check scenario variables
             if var_name in self.variables:
                 return str(self.variables[var_name])
+                
+            # Return original if not found
             return match.group(0)
         
         return re.sub(r'\$\{([^}]+)\}', replace_var, text)

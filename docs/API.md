@@ -13,7 +13,7 @@ This document provides comprehensive API documentation for LoadSpiker's Python i
 
 ## Engine
 
-The `Engine` class is the core component for executing load tests.
+The `Engine` class is the core component for executing load tests with multi-protocol support.
 
 ### Constructor
 
@@ -22,7 +22,7 @@ Engine(max_connections: int = 1000, worker_threads: int = 10)
 ```
 
 **Parameters:**
-- `max_connections` (int): Maximum number of concurrent HTTP connections (default: 1000)
+- `max_connections` (int): Maximum number of concurrent connections (default: 1000)
 - `worker_threads` (int): Number of worker threads for request processing (default: 10)
 
 **Example:**
@@ -104,6 +104,118 @@ reset_metrics() -> None
 ```
 
 Reset all performance metrics to zero.
+
+### Database Methods
+
+#### database_connect
+
+```python
+database_connect(connection_string: str, db_type: str = "auto") -> Dict[str, Any]
+```
+
+Connect to a database for load testing.
+
+**Parameters:**
+- `connection_string` (str): Database connection string (e.g., "mysql://user:pass@host:port/database")
+- `db_type` (str): Database type ("mysql", "postgresql", "mongodb", or "auto" to detect from URL)
+
+**Returns:**
+Dictionary containing connection response data including success status, response time, and connection details.
+
+**Example:**
+```python
+engine = Engine()
+response = engine.database_connect("mysql://testuser:testpass@localhost:3306/testdb", "mysql")
+print(f"Connected: {response['success']}")
+```
+
+#### database_query
+
+```python
+database_query(connection_string: str, query: str) -> Dict[str, Any]
+```
+
+Execute a database query or command.
+
+**Parameters:**
+- `connection_string` (str): Database connection string
+- `query` (str): SQL query or database command to execute
+
+**Returns:**
+Dictionary containing query response data including result set, affected rows, and execution metrics.
+
+**Example:**
+```python
+response = engine.database_query("mysql://testuser:testpass@localhost:3306/testdb", 
+                                "SELECT id, name FROM users WHERE active = 1")
+print(f"Query result: {response['body']}")
+```
+
+#### database_disconnect
+
+```python
+database_disconnect(connection_string: str) -> Dict[str, Any]
+```
+
+Disconnect from a database.
+
+**Parameters:**
+- `connection_string` (str): Database connection string
+
+**Returns:**
+Dictionary containing disconnection response data.
+
+**Example:**
+```python
+response = engine.database_disconnect("mysql://testuser:testpass@localhost:3306/testdb")
+print(f"Disconnected: {response['success']}")
+```
+
+### WebSocket Methods
+
+#### websocket_connect
+
+```python
+websocket_connect(url: str, subprotocol: str = "") -> Dict[str, Any]
+```
+
+Connect to a WebSocket server for load testing.
+
+**Parameters:**
+- `url` (str): WebSocket URL (ws:// or wss://)
+- `subprotocol` (str): Optional WebSocket subprotocol
+
+**Returns:**
+Dictionary containing connection response data.
+
+#### websocket_send
+
+```python
+websocket_send(url: str, message: str) -> Dict[str, Any]
+```
+
+Send a message to a WebSocket connection.
+
+**Parameters:**
+- `url` (str): WebSocket URL
+- `message` (str): Message to send
+
+**Returns:**
+Dictionary containing send response data.
+
+#### websocket_close
+
+```python
+websocket_close(url: str) -> Dict[str, Any]
+```
+
+Close a WebSocket connection.
+
+**Parameters:**
+- `url` (str): WebSocket URL
+
+**Returns:**
+Dictionary containing close response data.
 
 ## Scenarios
 

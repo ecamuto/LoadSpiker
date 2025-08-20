@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 // Connection pool for database connections
 #define MAX_DB_CONNECTIONS 100

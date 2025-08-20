@@ -15,17 +15,25 @@ BUILD_DIR = obj
 EXAMPLE_DIR = examples
 
 # Source files
-ENGINE_SOURCES = $(SRC_DIR)/engine.c $(SRC_DIR)/protocols/websocket.c
+ENGINE_SOURCES = $(SRC_DIR)/engine.c $(SRC_DIR)/protocols/websocket.c $(SRC_DIR)/protocols/mqtt.c $(SRC_DIR)/protocols/database.c $(SRC_DIR)/protocols/tcp.c $(SRC_DIR)/protocols/udp.c
 EXTENSION_SOURCES = $(SRC_DIR)/python_extension.c
 ALL_SOURCES = $(ENGINE_SOURCES) $(EXTENSION_SOURCES)
 
 # Build targets
 ENGINE_OBJ = $(BUILD_DIR)/engine.o
 WEBSOCKET_OBJ = $(BUILD_DIR)/websocket.o
+MQTT_OBJ = $(BUILD_DIR)/mqtt.o
+DATABASE_OBJ = $(BUILD_DIR)/database.o
+TCP_OBJ = $(BUILD_DIR)/tcp.o
+UDP_OBJ = $(BUILD_DIR)/udp.o
 EXTENSION_OBJ = $(BUILD_DIR)/python_extension.o
 LOADSPIKER_SO = $(BUILD_DIR)/loadspiker.so
 DEBUG_ENGINE_OBJ = $(BUILD_DIR)/engine_debug.o
 DEBUG_WEBSOCKET_OBJ = $(BUILD_DIR)/websocket_debug.o
+DEBUG_MQTT_OBJ = $(BUILD_DIR)/mqtt_debug.o
+DEBUG_DATABASE_OBJ = $(BUILD_DIR)/database_debug.o
+DEBUG_TCP_OBJ = $(BUILD_DIR)/tcp_debug.o
+DEBUG_UDP_OBJ = $(BUILD_DIR)/udp_debug.o
 DEBUG_EXTENSION_OBJ = $(BUILD_DIR)/python_extension_debug.o
 DEBUG_LOADSPIKER_SO = $(BUILD_DIR)/loadspiker_debug.so
 
@@ -44,13 +52,29 @@ $(ENGINE_OBJ): $(SRC_DIR)/engine.c | $(BUILD_DIR)
 $(WEBSOCKET_OBJ): $(SRC_DIR)/protocols/websocket.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Compile MQTT protocol
+$(MQTT_OBJ): $(SRC_DIR)/protocols/mqtt.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile Database protocol
+$(DATABASE_OBJ): $(SRC_DIR)/protocols/database.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile TCP protocol
+$(TCP_OBJ): $(SRC_DIR)/protocols/tcp.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile UDP protocol
+$(UDP_OBJ): $(SRC_DIR)/protocols/udp.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 # Compile Python extension
 $(EXTENSION_OBJ): $(EXTENSION_SOURCES) $(SRC_DIR)/engine.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(CURL_CFLAGS) $(PYTHON_INCLUDES) -c $< -o $@
 
 # Link shared library
-$(LOADSPIKER_SO): $(ENGINE_OBJ) $(WEBSOCKET_OBJ) $(EXTENSION_OBJ)
-	$(CC) -shared $(ENGINE_OBJ) $(WEBSOCKET_OBJ) $(EXTENSION_OBJ) $(CURL_LIBS) $(PYTHON_LIBS) -o $(LOADSPIKER_SO)
+$(LOADSPIKER_SO): $(ENGINE_OBJ) $(WEBSOCKET_OBJ) $(MQTT_OBJ) $(DATABASE_OBJ) $(TCP_OBJ) $(UDP_OBJ) $(EXTENSION_OBJ)
+	$(CC) -shared $(ENGINE_OBJ) $(WEBSOCKET_OBJ) $(MQTT_OBJ) $(DATABASE_OBJ) $(TCP_OBJ) $(UDP_OBJ) $(EXTENSION_OBJ) $(CURL_LIBS) $(PYTHON_LIBS) -o $(LOADSPIKER_SO)
 
 # Build everything
 build: $(LOADSPIKER_SO)
@@ -64,11 +88,23 @@ $(DEBUG_ENGINE_OBJ): $(SRC_DIR)/engine.c | $(BUILD_DIR)
 $(DEBUG_WEBSOCKET_OBJ): $(SRC_DIR)/protocols/websocket.c | $(BUILD_DIR)
 	$(CC) $(DEBUG_CFLAGS) -c $< -o $@
 
+$(DEBUG_MQTT_OBJ): $(SRC_DIR)/protocols/mqtt.c | $(BUILD_DIR)
+	$(CC) $(DEBUG_CFLAGS) -c $< -o $@
+
+$(DEBUG_DATABASE_OBJ): $(SRC_DIR)/protocols/database.c | $(BUILD_DIR)
+	$(CC) $(DEBUG_CFLAGS) -c $< -o $@
+
+$(DEBUG_TCP_OBJ): $(SRC_DIR)/protocols/tcp.c | $(BUILD_DIR)
+	$(CC) $(DEBUG_CFLAGS) -c $< -o $@
+
+$(DEBUG_UDP_OBJ): $(SRC_DIR)/protocols/udp.c | $(BUILD_DIR)
+	$(CC) $(DEBUG_CFLAGS) -c $< -o $@
+
 $(DEBUG_EXTENSION_OBJ): $(EXTENSION_SOURCES) $(SRC_DIR)/engine.h | $(BUILD_DIR)
 	$(CC) $(DEBUG_CFLAGS) $(CURL_CFLAGS) $(PYTHON_INCLUDES) -c $< -o $@
 
-$(DEBUG_LOADSPIKER_SO): $(DEBUG_ENGINE_OBJ) $(DEBUG_WEBSOCKET_OBJ) $(DEBUG_EXTENSION_OBJ)
-	$(CC) -shared $(DEBUG_ENGINE_OBJ) $(DEBUG_WEBSOCKET_OBJ) $(DEBUG_EXTENSION_OBJ) $(CURL_LIBS) $(PYTHON_LIBS) -fsanitize=address -o $(DEBUG_LOADSPIKER_SO)
+$(DEBUG_LOADSPIKER_SO): $(DEBUG_ENGINE_OBJ) $(DEBUG_WEBSOCKET_OBJ) $(DEBUG_MQTT_OBJ) $(DEBUG_DATABASE_OBJ) $(DEBUG_TCP_OBJ) $(DEBUG_UDP_OBJ) $(DEBUG_EXTENSION_OBJ)
+	$(CC) -shared $(DEBUG_ENGINE_OBJ) $(DEBUG_WEBSOCKET_OBJ) $(DEBUG_MQTT_OBJ) $(DEBUG_DATABASE_OBJ) $(DEBUG_TCP_OBJ) $(DEBUG_UDP_OBJ) $(DEBUG_EXTENSION_OBJ) $(CURL_LIBS) $(PYTHON_LIBS) -fsanitize=address -o $(DEBUG_LOADSPIKER_SO)
 
 # Build debug version
 debug: $(DEBUG_LOADSPIKER_SO)

@@ -106,11 +106,10 @@ static size_t header_callback(void* contents, size_t size, size_t nmemb, header_
     return size * nmemb; // Always return the original size to cURL
 }
 
-static uint64_t get_time_us() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000ULL + tv.tv_usec;
-}
+// Removed static get_time_us as it conflicts with mqtt.h declaration
+
+// Forward declaration for update_metrics
+static void update_metrics(engine_t* engine, uint64_t response_time_us, bool success);
 
 protocol_type_t engine_detect_protocol(const char* url) {
     if (!url) return PROTOCOL_HTTP;
@@ -167,13 +166,12 @@ int engine_mqtt_connect(engine_t* engine, const char* broker_host, int broker_po
     return result;
 }
 
-int engine_mqtt_publish(engine_t* engine, const char* broker_host, int broker_port,
-                       const char* client_id, const char* topic, const char* payload, 
-                       mqtt_qos_t qos, bool retain, response_t* response) {
-    if (!engine || !broker_host || !client_id || !topic || !payload || !response) return -1;
+int engine_mqtt_publish(engine_t* engine, const char* host, int port, const char* client_id,
+                       const char* topic, const char* message, int qos, bool retain, response_t* response) {
+    if (!engine || !host || !client_id || !topic || !message || !response) return -1;
     
     uint64_t start_time = get_time_us();
-    int result = mqtt_publish(broker_host, broker_port, client_id, topic, payload, qos, retain, response);
+    int result = mqtt_publish(host, port, client_id, topic, message, (mqtt_qos_t)qos, retain, response);
     uint64_t end_time = get_time_us();
     
     // Set protocol and timing information
@@ -186,12 +184,12 @@ int engine_mqtt_publish(engine_t* engine, const char* broker_host, int broker_po
     return result;
 }
 
-int engine_mqtt_subscribe(engine_t* engine, const char* broker_host, int broker_port,
-                         const char* client_id, const char* topic, mqtt_qos_t qos, response_t* response) {
-    if (!engine || !broker_host || !client_id || !topic || !response) return -1;
+int engine_mqtt_subscribe(engine_t* engine, const char* host, int port, const char* client_id,
+                         const char* topic, int qos, response_t* response) {
+    if (!engine || !host || !client_id || !topic || !response) return -1;
     
     uint64_t start_time = get_time_us();
-    int result = mqtt_subscribe(broker_host, broker_port, client_id, topic, qos, response);
+    int result = mqtt_subscribe(host, port, client_id, topic, (mqtt_qos_t)qos, response);
     uint64_t end_time = get_time_us();
     
     // Set protocol and timing information

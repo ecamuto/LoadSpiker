@@ -13,7 +13,7 @@ This document provides comprehensive API documentation for LoadSpiker's Python i
 
 ## Engine
 
-The `Engine` class is the core component for executing load tests.
+The `Engine` class is the core component for executing load tests with multi-protocol support.
 
 ### Constructor
 
@@ -22,7 +22,7 @@ Engine(max_connections: int = 1000, worker_threads: int = 10)
 ```
 
 **Parameters:**
-- `max_connections` (int): Maximum number of concurrent HTTP connections (default: 1000)
+- `max_connections` (int): Maximum number of concurrent connections (default: 1000)
 - `worker_threads` (int): Number of worker threads for request processing (default: 10)
 
 **Example:**
@@ -105,6 +105,470 @@ reset_metrics() -> None
 
 Reset all performance metrics to zero.
 
+### Database Methods
+
+#### database_connect
+
+```python
+database_connect(connection_string: str, db_type: str = "auto") -> Dict[str, Any]
+```
+
+Connect to a database for load testing.
+
+**Parameters:**
+- `connection_string` (str): Database connection string (e.g., "mysql://user:pass@host:port/database")
+- `db_type` (str): Database type ("mysql", "postgresql", "mongodb", or "auto" to detect from URL)
+
+**Returns:**
+Dictionary containing connection response data including success status, response time, and connection details.
+
+**Example:**
+```python
+engine = Engine()
+response = engine.database_connect("mysql://testuser:testpass@localhost:3306/testdb", "mysql")
+print(f"Connected: {response['success']}")
+```
+
+#### database_query
+
+```python
+database_query(connection_string: str, query: str) -> Dict[str, Any]
+```
+
+Execute a database query or command.
+
+**Parameters:**
+- `connection_string` (str): Database connection string
+- `query` (str): SQL query or database command to execute
+
+**Returns:**
+Dictionary containing query response data including result set, affected rows, and execution metrics.
+
+**Example:**
+```python
+response = engine.database_query("mysql://testuser:testpass@localhost:3306/testdb", 
+                                "SELECT id, name FROM users WHERE active = 1")
+print(f"Query result: {response['body']}")
+```
+
+#### database_disconnect
+
+```python
+database_disconnect(connection_string: str) -> Dict[str, Any]
+```
+
+Disconnect from a database.
+
+**Parameters:**
+- `connection_string` (str): Database connection string
+
+**Returns:**
+Dictionary containing disconnection response data.
+
+**Example:**
+```python
+response = engine.database_disconnect("mysql://testuser:testpass@localhost:3306/testdb")
+print(f"Disconnected: {response['success']}")
+```
+
+### WebSocket Methods
+
+#### websocket_connect
+
+```python
+websocket_connect(url: str, subprotocol: str = "") -> Dict[str, Any]
+```
+
+Connect to a WebSocket server for load testing.
+
+**Parameters:**
+- `url` (str): WebSocket URL (ws:// or wss://)
+- `subprotocol` (str): Optional WebSocket subprotocol
+
+**Returns:**
+Dictionary containing connection response data.
+
+#### websocket_send
+
+```python
+websocket_send(url: str, message: str) -> Dict[str, Any]
+```
+
+Send a message to a WebSocket connection.
+
+**Parameters:**
+- `url` (str): WebSocket URL
+- `message` (str): Message to send
+
+**Returns:**
+Dictionary containing send response data.
+
+#### websocket_close
+
+```python
+websocket_close(url: str) -> Dict[str, Any]
+```
+
+Close a WebSocket connection.
+
+**Parameters:**
+- `url` (str): WebSocket URL
+
+**Returns:**
+Dictionary containing close response data.
+
+### MQTT Methods
+
+LoadSpiker provides comprehensive MQTT (Message Queuing Telemetry Transport) protocol support for testing message queue systems, IoT applications, and publish-subscribe architectures.
+
+#### mqtt_connect
+
+```python
+mqtt_connect(
+    broker_host: str, 
+    broker_port: int = 1883,
+    client_id: str = "loadspiker_client",
+    username: str = None,
+    password: str = None,
+    keep_alive: int = 60
+) -> Dict[str, Any]
+```
+
+Connect to an MQTT broker for load testing.
+
+**Parameters:**
+- `broker_host` (str): MQTT broker hostname or IP address
+- `broker_port` (int): MQTT broker port (default: 1883, SSL: 8883)
+- `client_id` (str): MQTT client identifier (must be unique per connection)
+- `username` (str): Optional username for broker authentication
+- `password` (str): Optional password for broker authentication
+- `keep_alive` (int): Keep alive interval in seconds (default: 60)
+
+**Returns:**
+Dictionary containing connection response data including success status, response time, and connection details.
+
+**Example:**
+```python
+engine = Engine()
+
+# Basic connection
+response = engine.mqtt_connect("test.mosquitto.org", 1883, "test_client_123")
+print(f"Connected: {response['success']}")
+
+# Connection with authentication
+response = engine.mqtt_connect(
+    broker_host="my-mqtt-broker.com",
+    broker_port=1883,
+    client_id="loadspiker_client_001",
+    username="mqtt_user",
+    password="mqtt_password",
+    keep_alive=120
+)
+```
+
+#### mqtt_publish
+
+```python
+mqtt_publish(
+    broker_host: str,
+    broker_port: int = 1883,
+    client_id: str = "loadspiker_client", 
+    topic: str = "",
+    payload: str = "",
+    qos: int = 0,
+    retain: bool = False
+) -> Dict[str, Any]
+```
+
+Publish a message to an MQTT topic.
+
+**Parameters:**
+- `broker_host` (str): MQTT broker hostname or IP address
+- `broker_port` (int): MQTT broker port
+- `client_id` (str): MQTT client identifier
+- `topic` (str): MQTT topic to publish to
+- `payload` (str): Message payload/content
+- `qos` (int): Quality of Service level (0, 1, or 2)
+  - **QoS 0**: At most once delivery (fire and forget)
+  - **QoS 1**: At least once delivery (acknowledged delivery)
+  - **QoS 2**: Exactly once delivery (assured delivery)
+- `retain` (bool): Whether the broker should retain this message for future subscribers
+
+**Returns:**
+Dictionary containing publish response data including success status, response time, and message details.
+
+**Example:**
+```python
+# Basic publish (QoS 0)
+response = engine.mqtt_publish(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="publisher_client",
+    topic="sensors/temperature",
+    payload="23.5",
+    qos=0
+)
+
+# Publish with QoS 1 and retention
+response = engine.mqtt_publish(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="publisher_client",
+    topic="status/system",
+    payload="online",
+    qos=1,
+    retain=True  # Message will be retained for future subscribers
+)
+```
+
+#### mqtt_subscribe
+
+```python
+mqtt_subscribe(
+    broker_host: str,
+    broker_port: int = 1883,
+    client_id: str = "loadspiker_client",
+    topic: str = "",
+    qos: int = 0
+) -> Dict[str, Any]
+```
+
+Subscribe to an MQTT topic to receive messages.
+
+**Parameters:**
+- `broker_host` (str): MQTT broker hostname or IP address
+- `broker_port` (int): MQTT broker port
+- `client_id` (str): MQTT client identifier
+- `topic` (str): MQTT topic to subscribe to (supports wildcards)
+  - **+**: Single-level wildcard (e.g., "sensors/+/temperature")
+  - **#**: Multi-level wildcard (e.g., "sensors/#")
+- `qos` (int): Maximum Quality of Service level for received messages (0, 1, or 2)
+
+**Returns:**
+Dictionary containing subscription response data.
+
+**Example:**
+```python
+# Subscribe to specific topic
+response = engine.mqtt_subscribe(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="subscriber_client",
+    topic="sensors/temperature",
+    qos=0
+)
+
+# Subscribe with wildcards
+response = engine.mqtt_subscribe(
+    broker_host="test.mosquitto.org", 
+    broker_port=1883,
+    client_id="subscriber_client",
+    topic="sensors/+/data",  # Matches sensors/room1/data, sensors/room2/data, etc.
+    qos=1
+)
+
+# Subscribe to all subtopics
+response = engine.mqtt_subscribe(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="subscriber_client", 
+    topic="sensors/#",  # Matches all topics under sensors/
+    qos=2
+)
+```
+
+#### mqtt_unsubscribe
+
+```python
+mqtt_unsubscribe(
+    broker_host: str,
+    broker_port: int = 1883,
+    client_id: str = "loadspiker_client",
+    topic: str = ""
+) -> Dict[str, Any]
+```
+
+Unsubscribe from an MQTT topic.
+
+**Parameters:**
+- `broker_host` (str): MQTT broker hostname or IP address
+- `broker_port` (int): MQTT broker port
+- `client_id` (str): MQTT client identifier
+- `topic` (str): MQTT topic to unsubscribe from
+
+**Returns:**
+Dictionary containing unsubscription response data.
+
+**Example:**
+```python
+response = engine.mqtt_unsubscribe(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="subscriber_client",
+    topic="sensors/temperature"
+)
+```
+
+#### mqtt_disconnect
+
+```python
+mqtt_disconnect(
+    broker_host: str,
+    broker_port: int = 1883,
+    client_id: str = "loadspiker_client"
+) -> Dict[str, Any]
+```
+
+Disconnect from an MQTT broker.
+
+**Parameters:**
+- `broker_host` (str): MQTT broker hostname or IP address
+- `broker_port` (int): MQTT broker port
+- `client_id` (str): MQTT client identifier
+
+**Returns:**
+Dictionary containing disconnection response data.
+
+**Example:**
+```python
+response = engine.mqtt_disconnect(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="test_client"
+)
+```
+
+### TCP Socket Methods
+
+#### tcp_connect
+
+```python
+tcp_connect(hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]
+```
+
+Connect to a TCP server for load testing.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+- `timeout_ms` (int): Connection timeout in milliseconds
+
+**Returns:**
+Dictionary containing connection response data.
+
+#### tcp_send
+
+```python
+tcp_send(hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]
+```
+
+Send data to a TCP connection.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+- `data` (str): Data to send
+- `timeout_ms` (int): Send timeout in milliseconds
+
+**Returns:**
+Dictionary containing send response data.
+
+#### tcp_receive
+
+```python
+tcp_receive(hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]
+```
+
+Receive data from a TCP connection.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+- `timeout_ms` (int): Receive timeout in milliseconds
+
+**Returns:**
+Dictionary containing received data.
+
+#### tcp_disconnect
+
+```python
+tcp_disconnect(hostname: str, port: int) -> Dict[str, Any]
+```
+
+Disconnect from a TCP server.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+
+**Returns:**
+Dictionary containing disconnection response data.
+
+### UDP Socket Methods
+
+#### udp_create_endpoint
+
+```python
+udp_create_endpoint(hostname: str, port: int) -> Dict[str, Any]
+```
+
+Create a UDP endpoint for communication.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+
+**Returns:**
+Dictionary containing endpoint creation response data.
+
+#### udp_send
+
+```python
+udp_send(hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]
+```
+
+Send data via UDP.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+- `data` (str): Data to send
+- `timeout_ms` (int): Send timeout in milliseconds
+
+**Returns:**
+Dictionary containing send response data.
+
+#### udp_receive
+
+```python
+udp_receive(hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]
+```
+
+Receive data via UDP.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+- `timeout_ms` (int): Receive timeout in milliseconds
+
+**Returns:**
+Dictionary containing received data and sender information.
+
+#### udp_close_endpoint
+
+```python
+udp_close_endpoint(hostname: str, port: int) -> Dict[str, Any]
+```
+
+Close a UDP endpoint.
+
+**Parameters:**
+- `hostname` (str): Target hostname or IP address
+- `port` (int): Target port number
+
+**Returns:**
+Dictionary containing endpoint closure response data.
+
 ## Scenarios
 
 The scenario system provides structured ways to define test patterns.
@@ -168,6 +632,102 @@ scenario.get("https://api.example.com/users")
 scenario.post("https://api.example.com/users", body='{"name": "Test"}')
 scenario.put("https://api.example.com/users/1", body='{"name": "Updated"}')
 scenario.delete("https://api.example.com/users/1")
+```
+
+### MQTTScenario
+
+Specialized scenario class for MQTT load testing with pre-built test patterns.
+
+```python
+MQTTScenario(broker_host: str, broker_port: int = 1883, client_id: str = "loadspiker_client", name: str = "MQTT Test")
+```
+
+**Parameters:**
+- `broker_host` (str): MQTT broker hostname or IP address
+- `broker_port` (int): MQTT broker port (default: 1883)
+- `client_id` (str): MQTT client identifier
+- `name` (str): Scenario name for reporting
+
+#### Methods
+
+##### add_publish_test
+
+```python
+add_publish_test(topic: str, payload: str = "Test message", qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
+```
+
+Add a complete publish test (connect, publish, disconnect).
+
+##### add_subscribe_test
+
+```python
+add_subscribe_test(topic: str, qos: int = 0, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
+```
+
+Add a complete subscribe test (connect, subscribe, unsubscribe, disconnect).
+
+##### add_pub_sub_test
+
+```python
+add_pub_sub_test(topic: str, payload: str = "Test message", qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
+```
+
+Add a complete publish-subscribe test.
+
+##### add_burst_publish_test
+
+```python
+add_burst_publish_test(topic: str, message_count: int = 10, base_payload: str = "Burst message", qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
+```
+
+Add a burst publish test for high-throughput scenarios.
+
+##### add_topic_pattern_test
+
+```python
+add_topic_pattern_test(topic_pattern: str, payload: str = "Pattern test", topic_count: int = 5, qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
+```
+
+Add a topic pattern test with multiple topics matching wildcards.
+
+**MQTT Scenario Example:**
+```python
+from loadspiker.scenarios import MQTTScenario
+from loadspiker import Engine
+
+# Create MQTT scenario
+scenario = MQTTScenario(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="loadspiker_test",
+    name="IoT Sensor Test"
+)
+
+# Add different test patterns
+scenario.add_publish_test(
+    topic="sensors/temperature",
+    payload="25.3",
+    qos=1
+)
+
+scenario.add_burst_publish_test(
+    topic="sensors/data",
+    message_count=50,
+    base_payload="sensor reading",
+    qos=0
+)
+
+scenario.add_topic_pattern_test(
+    topic_pattern="devices/+/status",
+    payload="online",
+    topic_count=10,
+    qos=1,
+    retain=True
+)
+
+# Execute the scenario
+engine = Engine()
+results = engine.run_scenario(scenario, users=20, duration=120)
 ```
 
 ## Assertions

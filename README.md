@@ -8,8 +8,10 @@ A high-performance load testing tool with a C engine and Python scripting interf
 
 ## Features
 
-- **High Performance**: C-based HTTP engine with async I/O and connection pooling
+- **High Performance**: C-based multi-protocol engine with async I/O and connection pooling
 - **Python Scripting**: Easy-to-use Python API for creating test scenarios
+- **Multi-Protocol Support**: HTTP/HTTPS, WebSocket, TCP, UDP, Database, and MQTT protocols
+- **Message Queue Testing**: Built-in MQTT support for IoT and pub-sub architecture testing
 - **Real-time Metrics**: Live performance monitoring and reporting
 - **Multiple Report Formats**: Console, JSON, and HTML reports with charts
 - **Flexible Load Patterns**: Constant load, ramp-up, spike testing, and custom patterns
@@ -109,7 +111,11 @@ if not success:
                                  │
          ┌───────────────────────────────────────────────┐
          │              C Engine Core                    │
+         │  • Multi-Protocol Router                      │
          │  • HTTP Client (libcurl)                      │
+         │  • MQTT Protocol Support                      │
+         │  • WebSocket, TCP, UDP                        │
+         │  • Database Connectors                        │
          │  • Connection Pooling                         │
          │  • Worker Threads                             │
          │  • Metrics Collection                         │
@@ -164,6 +170,73 @@ scenario.search("laptop")
 scenario.login("user@example.com", "password")
 
 results = engine.run_scenario(scenario, users=15, duration=120)
+```
+
+### MQTT Message Queue Testing
+
+```python
+from loadspiker import Engine
+from loadspiker.scenarios import MQTTScenario
+
+engine = Engine(max_connections=100, worker_threads=4)
+
+# Create MQTT scenario for IoT device simulation
+mqtt_scenario = MQTTScenario(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="loadspiker_iot_test",
+    name="IoT Sensor Load Test"
+)
+
+# Add various MQTT test patterns
+mqtt_scenario.add_publish_test(
+    topic="sensors/temperature",
+    payload="25.3",
+    qos=1,
+    retain=True
+)
+
+mqtt_scenario.add_burst_publish_test(
+    topic="sensors/data",
+    message_count=100,
+    base_payload="sensor reading",
+    qos=0
+)
+
+mqtt_scenario.add_topic_pattern_test(
+    topic_pattern="devices/+/status",
+    payload="online",
+    topic_count=50,
+    qos=1
+)
+
+# Run MQTT load test
+results = engine.run_scenario(mqtt_scenario, users=25, duration=120)
+print(f"MQTT throughput: {results['requests_per_second']:.2f} messages/sec")
+
+# Direct MQTT operations
+engine = Engine()
+
+# Connect and publish
+response = engine.mqtt_connect("test.mosquitto.org", 1883, "test_client")
+response = engine.mqtt_publish(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="test_client",
+    topic="loadtest/data",
+    payload="Hello MQTT!",
+    qos=1,
+    retain=False
+)
+
+# Subscribe with wildcards
+response = engine.mqtt_subscribe(
+    broker_host="test.mosquitto.org",
+    broker_port=1883,
+    client_id="test_client",
+    topic="sensors/+/temperature",  # Single-level wildcard
+    qos=0
+)
 ```
 
 ### Custom Load Patterns

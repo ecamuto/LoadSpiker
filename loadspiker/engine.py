@@ -12,6 +12,14 @@ from typing import List, Dict, Any, Optional, Callable, Union, TYPE_CHECKING
 if TYPE_CHECKING:
     from .scenarios import Scenario
 
+# Import session management and authentication
+try:
+    from .session_manager import get_session_manager
+    from .authentication import get_authentication_manager
+    _session_auth_available = True
+except ImportError:
+    _session_auth_available = False
+
 # Use lazy imports to avoid circular dependencies
 _python_modules_available = None
 _scenarios_module = None
@@ -53,13 +61,22 @@ _CEngine = None
 _c_extension_available = False
 
 try:
-    # For now, disable C extension loading to focus on getting the package working
-    # The C extension has complex loading issues that need more investigation
-    # But the Python fallback implementation provides full functionality
-    _c_extension_available = False
-    print("ℹ️  C extension disabled - using Python implementation")
+    # Try to load the C extension for high performance
+    if os.path.exists(so_path):
+        # Load the C extension with a unique module name to avoid conflicts
+        spec = importlib.util.spec_from_file_location("loadspiker_c_module", so_path)
+        if spec and spec.loader:
+            c_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(c_module)
+            _CEngine = c_module.Engine
+            _c_extension_available = True
+            print("🚀 C extension loaded successfully - high performance mode enabled")
+        else:
+            raise ImportError("Could not load C extension spec")
+    else:
+        raise FileNotFoundError(f"C extension not found at {so_path}")
 except Exception as e:
-    print(f"⚠️  C extension not available: {e}")
+    print(f"ℹ️  C extension not available: {e}")
     print("   Falling back to Python-only implementation")
     _c_extension_available = False
 
@@ -71,6 +88,14 @@ class _PythonEngine:
     def __init__(self, max_connections: int = 1000, worker_threads: int = 10):
         self.max_connections = max_connections
         self.worker_threads = worker_threads
+        
+        # Initialize session and authentication managers if available
+        if _session_auth_available:
+            self.session_manager = get_session_manager()
+            self.auth_manager = get_authentication_manager()
+        else:
+            self.session_manager = None
+            self.auth_manager = None
         self._metrics = {
             'total_requests': 0,
             'successful_requests': 0,

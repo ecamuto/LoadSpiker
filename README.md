@@ -11,6 +11,8 @@ A high-performance load testing tool with a C engine and Python scripting interf
 - **High Performance**: C-based multi-protocol engine with async I/O and connection pooling
 - **Python Scripting**: Easy-to-use Python API for creating test scenarios
 - **Multi-Protocol Support**: HTTP/HTTPS, WebSocket, TCP, UDP, Database, and MQTT protocols
+- **Session Management**: Thread-safe session storage with automatic cookie handling and request correlation
+- **Authentication Flows**: Complete authentication system supporting Basic Auth, Bearer Token, API Key, Form-based, OAuth 2.0, and Custom authentication
 - **Message Queue Testing**: Built-in MQTT support for IoT and pub-sub architecture testing
 - **Real-time Metrics**: Live performance monitoring and reporting
 - **Multiple Report Formats**: Console, JSON, and HTML reports with charts
@@ -19,6 +21,7 @@ A high-performance load testing tool with a C engine and Python scripting interf
 - **Website Testing**: Realistic user behavior simulation for web applications
 - **Advanced Assertions**: Comprehensive assertion system for response validation
 - **Data-Driven Testing**: CSV file support for parameterized load testing with multiple distribution strategies
+- **Multi-User Session Isolation**: Complete separation of session data between virtual users
 
 ## Quick Start
 
@@ -257,6 +260,82 @@ for users, duration in stress_test(200, step_size=20):
     engine.run_scenario(scenario, users, duration)
 ```
 
+### Session Management and Authentication
+
+```python
+from loadspiker import Engine
+from loadspiker.session_manager import get_session_manager
+from loadspiker.authentication import (
+    get_authentication_manager, create_basic_auth, create_bearer_auth,
+    create_api_key_auth, create_form_auth, create_oauth2_auth
+)
+
+engine = Engine()
+session_manager = get_session_manager()
+auth_manager = get_authentication_manager()
+
+# Register different authentication methods
+auth_manager.register_flow("basic", create_basic_auth("user", "pass"))
+auth_manager.register_flow("api_key", create_api_key_auth("sk-123", "X-API-Key"))
+auth_manager.register_flow("bearer", create_bearer_auth(token="jwt_token_xyz"))
+auth_manager.register_flow("form", create_form_auth(
+    login_url="https://example.com/login",
+    username_field="email",
+    password_field="password",
+    success_indicator="Welcome"
+))
+
+# Authenticate different users with different methods
+for user_id, auth_method in [("user1", "basic"), ("user2", "api_key"), ("user3", "bearer")]:
+    result = auth_manager.authenticate(auth_method, engine, user_id)
+    print(f"{user_id} authenticated: {result['success']}")
+
+# Session management with request correlation
+login_response = engine.execute_request(
+    url="https://api.example.com/login",
+    method="POST",
+    headers={"Content-Type": "application/json"},
+    body='{"username": "testuser", "password": "testpass"}'
+)
+
+# Auto-handle cookies and extract values for correlation
+session_manager.auto_handle_cookies("user1", login_response)
+extract_rules = [
+    {"type": "json_path", "path": "access_token", "variable": "token"},
+    {"type": "json_path", "path": "user.id", "variable": "user_id"},
+    {"type": "header", "name": "X-Session-ID", "variable": "session_id"},
+    {"type": "cookie", "name": "csrf_token", "variable": "csrf"}
+]
+session_manager.process_response("user1", login_response, extract_rules)
+
+# Use session data in subsequent requests
+headers = session_manager.prepare_request_headers("user1", {
+    "Content-Type": "application/json"
+})
+protected_response = engine.execute_request(
+    url="https://api.example.com/protected",
+    headers=headers  # Automatically includes session cookies and auth tokens
+)
+
+# Access extracted session variables
+session = session_manager.get_session("user1")
+user_id = session.get("user_id")
+csrf_token = session.get("csrf")
+print(f"User {user_id} session established with CSRF: {csrf_token}")
+
+# Multi-user session isolation
+for user in ["alice", "bob", "charlie"]:
+    auth_manager.authenticate("basic", engine, user_id=user)
+    session = session_manager.get_session(user)
+    session.set("role", f"{user}_role")
+    
+# Each user maintains separate session state
+print("Session isolation test:")
+for user in ["alice", "bob", "charlie"]:
+    session = session_manager.get_session(user)
+    print(f"{user}: role={session.get('role')}, cookies={session.get_all_cookies()}")
+```
+
 ### Data-Driven Testing with CSV
 
 ```python
@@ -274,10 +353,10 @@ scenario = Scenario("User Login Test")
 
 def user_login(user_id):
     user_data = get_user_data(user_id)
-    return scenario.post("/api/login", body=f'''{{
+    return scenario.post("/api/login", body=f'''{
         "username": "{user_data['username']}",
         "password": "{user_data['password']}"
-    }}''')
+    }''')
 
 # Or use built-in scenario CSV support with variable substitution
 scenario.load_data_file("users.csv", strategy="sequential")

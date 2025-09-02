@@ -5,6 +5,8 @@ This document provides comprehensive API documentation for LoadSpiker's Python i
 ## Table of Contents
 
 - [Engine](#engine)
+- [Session Management](#session-management)
+- [Authentication](#authentication)
 - [Scenarios](#scenarios)
 - [Assertions](#assertions)
 - [Performance Assertions](#performance-assertions)
@@ -122,101 +124,6 @@ Connect to a database for load testing.
 **Returns:**
 Dictionary containing connection response data including success status, response time, and connection details.
 
-**Example:**
-```python
-engine = Engine()
-response = engine.database_connect("mysql://testuser:testpass@localhost:3306/testdb", "mysql")
-print(f"Connected: {response['success']}")
-```
-
-#### database_query
-
-```python
-database_query(connection_string: str, query: str) -> Dict[str, Any]
-```
-
-Execute a database query or command.
-
-**Parameters:**
-- `connection_string` (str): Database connection string
-- `query` (str): SQL query or database command to execute
-
-**Returns:**
-Dictionary containing query response data including result set, affected rows, and execution metrics.
-
-**Example:**
-```python
-response = engine.database_query("mysql://testuser:testpass@localhost:3306/testdb", 
-                                "SELECT id, name FROM users WHERE active = 1")
-print(f"Query result: {response['body']}")
-```
-
-#### database_disconnect
-
-```python
-database_disconnect(connection_string: str) -> Dict[str, Any]
-```
-
-Disconnect from a database.
-
-**Parameters:**
-- `connection_string` (str): Database connection string
-
-**Returns:**
-Dictionary containing disconnection response data.
-
-**Example:**
-```python
-response = engine.database_disconnect("mysql://testuser:testpass@localhost:3306/testdb")
-print(f"Disconnected: {response['success']}")
-```
-
-### WebSocket Methods
-
-#### websocket_connect
-
-```python
-websocket_connect(url: str, subprotocol: str = "") -> Dict[str, Any]
-```
-
-Connect to a WebSocket server for load testing.
-
-**Parameters:**
-- `url` (str): WebSocket URL (ws:// or wss://)
-- `subprotocol` (str): Optional WebSocket subprotocol
-
-**Returns:**
-Dictionary containing connection response data.
-
-#### websocket_send
-
-```python
-websocket_send(url: str, message: str) -> Dict[str, Any]
-```
-
-Send a message to a WebSocket connection.
-
-**Parameters:**
-- `url` (str): WebSocket URL
-- `message` (str): Message to send
-
-**Returns:**
-Dictionary containing send response data.
-
-#### websocket_close
-
-```python
-websocket_close(url: str) -> Dict[str, Any]
-```
-
-Close a WebSocket connection.
-
-**Parameters:**
-- `url` (str): WebSocket URL
-
-**Returns:**
-Dictionary containing close response data.
-
 ### MQTT Methods
 
 LoadSpiker provides comprehensive MQTT (Message Queuing Telemetry Transport) protocol support for testing message queue systems, IoT applications, and publish-subscribe architectures.
@@ -236,36 +143,6 @@ mqtt_connect(
 
 Connect to an MQTT broker for load testing.
 
-**Parameters:**
-- `broker_host` (str): MQTT broker hostname or IP address
-- `broker_port` (int): MQTT broker port (default: 1883, SSL: 8883)
-- `client_id` (str): MQTT client identifier (must be unique per connection)
-- `username` (str): Optional username for broker authentication
-- `password` (str): Optional password for broker authentication
-- `keep_alive` (int): Keep alive interval in seconds (default: 60)
-
-**Returns:**
-Dictionary containing connection response data including success status, response time, and connection details.
-
-**Example:**
-```python
-engine = Engine()
-
-# Basic connection
-response = engine.mqtt_connect("test.mosquitto.org", 1883, "test_client_123")
-print(f"Connected: {response['success']}")
-
-# Connection with authentication
-response = engine.mqtt_connect(
-    broker_host="my-mqtt-broker.com",
-    broker_port=1883,
-    client_id="loadspiker_client_001",
-    username="mqtt_user",
-    password="mqtt_password",
-    keep_alive=120
-)
-```
-
 #### mqtt_publish
 
 ```python
@@ -282,292 +159,492 @@ mqtt_publish(
 
 Publish a message to an MQTT topic.
 
+### TCP/UDP Methods
+
+LoadSpiker includes comprehensive TCP and UDP socket testing capabilities for network protocol testing.
+
+## Session Management
+
+LoadSpiker provides comprehensive session management capabilities for handling stateful HTTP interactions, cookies, tokens, and request correlation. This enables advanced load testing scenarios that require maintaining state across multiple requests, similar to real user behavior.
+
+### Overview
+
+The session management system provides:
+
+- **Thread-Safe Session Storage**: Isolated session state per virtual user
+- **Automatic Cookie Handling**: Set-Cookie headers automatically processed and sent
+- **Token Management**: Bearer tokens, API keys, and custom tokens with expiration tracking
+- **Request Correlation**: Extract values from responses for use in subsequent requests
+- **Multi-User Isolation**: Complete separation of session data between virtual users
+
+### SessionManager
+
+The central class for managing user sessions and state.
+
+```python
+from loadspiker.session_manager import get_session_manager
+
+session_manager = get_session_manager()
+```
+
+#### Methods
+
+##### get_session
+
+```python
+get_session(user_id: Union[str, int]) -> SessionStore
+```
+
+Get or create a session for a specific user.
+
 **Parameters:**
-- `broker_host` (str): MQTT broker hostname or IP address
-- `broker_port` (int): MQTT broker port
-- `client_id` (str): MQTT client identifier
-- `topic` (str): MQTT topic to publish to
-- `payload` (str): Message payload/content
-- `qos` (int): Quality of Service level (0, 1, or 2)
-  - **QoS 0**: At most once delivery (fire and forget)
-  - **QoS 1**: At least once delivery (acknowledged delivery)
-  - **QoS 2**: Exactly once delivery (assured delivery)
-- `retain` (bool): Whether the broker should retain this message for future subscribers
+- `user_id` (Union[str, int]): Unique identifier for the user/session
 
 **Returns:**
-Dictionary containing publish response data including success status, response time, and message details.
+- `SessionStore`: Session storage object for the user
 
-**Example:**
+##### prepare_request_headers
+
 ```python
-# Basic publish (QoS 0)
-response = engine.mqtt_publish(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="publisher_client",
-    topic="sensors/temperature",
-    payload="23.5",
-    qos=0
+prepare_request_headers(user_id: Union[str, int], base_headers: Dict[str, str] = None) -> Dict[str, str]
+```
+
+Prepare HTTP headers including session cookies and authentication tokens.
+
+##### auto_handle_cookies
+
+```python
+auto_handle_cookies(user_id: Union[str, int], response: Dict[str, Any]) -> None
+```
+
+Automatically extract and store cookies from response headers.
+
+##### process_response
+
+```python
+process_response(user_id: Union[str, int], response: Dict[str, Any], extract_rules: List[Dict[str, str]] = None) -> None
+```
+
+Process response and extract values according to correlation rules.
+
+### SessionStore
+
+Individual session storage for a user, providing thread-safe access to cookies, tokens, and custom data.
+
+#### Methods
+
+##### set/get
+
+```python
+set(key: str, value: Any) -> None
+get(key: str, default: Any = None) -> Any
+```
+
+Store and retrieve arbitrary session data.
+
+##### set_token/get_token
+
+```python
+set_token(token_type: str, token_value: str, expires_at: float = None) -> None
+get_token(token_type: str) -> str
+```
+
+Manage authentication tokens with optional expiration.
+
+##### set_cookie/get_cookie
+
+```python
+set_cookie(name: str, value: str, domain: str = "", path: str = "/") -> None
+get_cookie(name: str) -> str
+```
+
+Manage HTTP cookies.
+
+### Session Management Example
+
+```python
+from loadspiker import Engine
+from loadspiker.session_manager import get_session_manager
+
+engine = Engine()
+session_manager = get_session_manager()
+
+# Simulate login request that returns session cookie and user data
+login_response = engine.execute_request(
+    url="https://api.example.com/login",
+    method="POST",
+    headers={"Content-Type": "application/json"},
+    body='{"username": "testuser", "password": "testpass"}'
 )
 
-# Publish with QoS 1 and retention
-response = engine.mqtt_publish(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="publisher_client",
-    topic="status/system",
-    payload="online",
-    qos=1,
-    retain=True  # Message will be retained for future subscribers
+# Auto-handle cookies from login response
+session_manager.auto_handle_cookies("user1", login_response)
+
+# Extract user data using correlation rules
+extract_rules = [
+    {"type": "json_path", "path": "user.id", "variable": "user_id"},
+    {"type": "json_path", "path": "access_token", "variable": "token"},
+    {"type": "json_path", "path": "user.profile.email", "variable": "email"}
+]
+
+session_manager.process_response("user1", login_response, extract_rules)
+
+# Prepare headers for subsequent request with session data
+headers = session_manager.prepare_request_headers("user1", {
+    "Content-Type": "application/json"
+})
+
+# Make authenticated request using session
+profile_response = engine.execute_request(
+    url="https://api.example.com/profile",
+    method="GET",
+    headers=headers  # Includes session cookies and tokens automatically
+)
+
+# Access session data
+session = session_manager.get_session("user1")
+user_id = session.get("user_id")
+email = session.get("email")
+print(f"User {user_id} with email {email} profile retrieved")
+```
+
+### Request Correlation
+
+Request correlation allows extracting values from one response to use in subsequent requests:
+
+```python
+# Extract correlation rules
+correlation_rules = [
+    # Extract from JSON response
+    {"type": "json_path", "path": "data.user.id", "variable": "user_id"},
+    {"type": "json_path", "path": "pagination.next_page", "variable": "next_page"},
+    
+    # Extract from headers
+    {"type": "header", "name": "X-Request-ID", "variable": "request_id"},
+    {"type": "header", "name": "Location", "variable": "created_resource_url"},
+    
+    # Extract from cookies
+    {"type": "cookie", "name": "csrf_token", "variable": "csrf"},
+    
+    # Extract using regex
+    {"type": "regex", "pattern": r'<input name="token" value="([^"]+)"', "variable": "form_token"}
+]
+
+# Process response with correlation
+session_manager.process_response("user1", response, correlation_rules)
+
+# Use extracted values in next request
+session = session_manager.get_session("user1")
+user_id = session.get("user_id")
+csrf_token = session.get("csrf")
+
+next_response = engine.execute_request(
+    url=f"https://api.example.com/users/{user_id}/update",
+    method="POST",
+    headers=session_manager.prepare_request_headers("user1"),
+    body=f'{{"csrf_token": "{csrf_token}", "name": "Updated Name"}}'
 )
 ```
 
-#### mqtt_subscribe
+## Authentication
+
+LoadSpiker provides a comprehensive authentication system supporting multiple authentication methods and flows commonly used in enterprise applications and APIs.
+
+### Overview
+
+The authentication system supports:
+
+- **Basic Authentication**: HTTP Basic Auth with username/password
+- **Bearer Token Authentication**: JWT, OAuth tokens, API tokens
+- **API Key Authentication**: Custom API keys in headers or query parameters
+- **Form-Based Authentication**: Traditional login forms with session cookies
+- **OAuth 2.0 Flows**: Authorization code flow and client credentials
+- **Custom Authentication**: User-defined authentication logic
+
+### AuthenticationManager
+
+Central manager for handling multiple authentication flows.
 
 ```python
-mqtt_subscribe(
-    broker_host: str,
-    broker_port: int = 1883,
-    client_id: str = "loadspiker_client",
-    topic: str = "",
-    qos: int = 0
-) -> Dict[str, Any]
+from loadspiker.authentication import get_authentication_manager
+
+auth_manager = get_authentication_manager()
 ```
 
-Subscribe to an MQTT topic to receive messages.
+#### Methods
+
+##### register_flow
+
+```python
+register_flow(name: str, flow: AuthenticationFlow) -> None
+```
+
+Register an authentication flow with a given name.
+
+##### authenticate
+
+```python
+authenticate(flow_name: str, engine, user_id: Union[str, int], **kwargs) -> Dict[str, Any]
+```
+
+Authenticate using a specific flow.
 
 **Parameters:**
-- `broker_host` (str): MQTT broker hostname or IP address
-- `broker_port` (int): MQTT broker port
-- `client_id` (str): MQTT client identifier
-- `topic` (str): MQTT topic to subscribe to (supports wildcards)
-  - **+**: Single-level wildcard (e.g., "sensors/+/temperature")
-  - **#**: Multi-level wildcard (e.g., "sensors/#")
-- `qos` (int): Maximum Quality of Service level for received messages (0, 1, or 2)
+- `flow_name` (str): Name of the registered authentication flow
+- `engine`: LoadSpiker engine instance
+- `user_id` (Union[str, int]): User identifier
+- `**kwargs`: Authentication-specific parameters
 
 **Returns:**
-Dictionary containing subscription response data.
+- `Dict[str, Any]`: Authentication result with success status and details
 
-**Example:**
+##### is_authenticated
+
 ```python
-# Subscribe to specific topic
-response = engine.mqtt_subscribe(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="subscriber_client",
-    topic="sensors/temperature",
-    qos=0
+is_authenticated(user_id: Union[str, int], flow_name: str = "") -> bool
+```
+
+Check if a user is currently authenticated.
+
+##### logout
+
+```python
+logout(user_id: Union[str, int], flow_name: str = "") -> None
+```
+
+Logout user from specific flow or all flows.
+
+##### get_auth_headers
+
+```python
+get_auth_headers(user_id: Union[str, int]) -> Dict[str, str]
+```
+
+Get authentication headers for requests.
+
+### Authentication Flows
+
+#### Basic Authentication
+
+HTTP Basic Authentication using username and password.
+
+```python
+from loadspiker.authentication import create_basic_auth
+
+# Create basic auth flow
+basic_auth = create_basic_auth("username", "password")
+auth_manager.register_flow("basic", basic_auth)
+
+# Authenticate
+result = auth_manager.authenticate("basic", engine, user_id="user1")
+print(f"Basic auth result: {result}")
+
+# Get auth headers for requests
+headers = auth_manager.get_auth_headers("user1")
+# headers will include: {'Authorization': 'Basic dXNlcm5hbWU6cGFzc3dvcmQ='}
+```
+
+#### Bearer Token Authentication
+
+Support for JWT tokens, OAuth tokens, and other bearer tokens.
+
+```python
+from loadspiker.authentication import create_bearer_auth
+
+# Direct token usage
+bearer_auth = create_bearer_auth(token="eyJhbGciOiJIUzI1NiIs...")
+auth_manager.register_flow("bearer", bearer_auth)
+
+# Token endpoint usage (OAuth client credentials)
+bearer_auth = create_bearer_auth(
+    token_endpoint="https://auth.example.com/oauth/token",
+    client_id="my_client_id",
+    client_secret="my_client_secret"
 )
 
-# Subscribe with wildcards
-response = engine.mqtt_subscribe(
-    broker_host="test.mosquitto.org", 
-    broker_port=1883,
-    client_id="subscriber_client",
-    topic="sensors/+/data",  # Matches sensors/room1/data, sensors/room2/data, etc.
-    qos=1
+# Authenticate with token endpoint
+result = auth_manager.authenticate("bearer", engine, user_id="user1", 
+                                 grant_type="client_credentials",
+                                 scope="read write")
+```
+
+#### API Key Authentication
+
+API key authentication via headers or query parameters.
+
+```python
+from loadspiker.authentication import create_api_key_auth
+
+# API key in header
+api_key_auth = create_api_key_auth("sk-1234567890abcdef", "X-API-Key")
+auth_manager.register_flow("api_key", api_key_auth)
+
+# Authenticate
+result = auth_manager.authenticate("api_key", engine, user_id="user1")
+
+# Headers will include: {'X-API-Key': 'sk-1234567890abcdef'}
+```
+
+#### Form-Based Authentication
+
+Traditional login forms with session cookies.
+
+```python
+from loadspiker.authentication import create_form_auth
+
+# Create form auth flow
+form_auth = create_form_auth(
+    login_url="https://example.com/login",
+    username_field="email",
+    password_field="password",
+    success_indicator="Welcome"  # Text indicating successful login
+)
+auth_manager.register_flow("form", form_auth)
+
+# Authenticate with credentials
+result = auth_manager.authenticate("form", engine, user_id="user1",
+                                 username="user@example.com",
+                                 password="password123")
+
+# Session cookies are automatically managed
+```
+
+#### OAuth 2.0 Authorization Code Flow
+
+OAuth 2.0 authorization code flow (simplified for testing).
+
+```python
+from loadspiker.authentication import create_oauth2_auth
+
+# Create OAuth2 flow
+oauth2_auth = create_oauth2_auth(
+    auth_url="https://auth.example.com/oauth/authorize",
+    token_url="https://auth.example.com/oauth/token",
+    client_id="my_client_id",
+    client_secret="my_client_secret",
+    redirect_uri="https://myapp.example.com/callback"
+)
+auth_manager.register_flow("oauth2", oauth2_auth)
+
+# Generate authorization URL
+result = auth_manager.authenticate("oauth2", engine, user_id="user1")
+print(f"Visit: {result['authorization_url']}")
+
+# After obtaining authorization code manually
+result = auth_manager.authenticate("oauth2", engine, user_id="user1",
+                                 authorization_code="abc123def456")
+```
+
+#### Custom Authentication
+
+User-defined authentication logic for complex scenarios.
+
+```python
+from loadspiker.authentication import create_custom_auth
+
+def my_custom_auth(engine, user_id, session_manager, **kwargs):
+    """Custom authentication logic"""
+    api_key = kwargs.get('api_key')
+    secret = kwargs.get('secret')
+    
+    # Custom validation logic
+    if not api_key or not secret:
+        return {'success': False, 'message': 'API key and secret required'}
+    
+    # Make custom auth request
+    auth_response = engine.execute_request(
+        url="https://api.example.com/authenticate",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        body=f'{{"api_key": "{api_key}", "secret": "{secret}"}}'
+    )
+    
+    if auth_response.get('status_code') == 200:
+        # Extract token from response
+        import json
+        data = json.loads(auth_response.get('body', '{}'))
+        token = data.get('access_token')
+        
+        # Store in session
+        session = session_manager.get_session(user_id)
+        session.set_token('custom', token)
+        
+        return {
+            'success': True,
+            'auth_type': 'custom',
+            'message': 'Custom authentication successful'
+        }
+    else:
+        return {'success': False, 'message': 'Authentication failed'}
+
+# Create custom auth flow
+custom_auth = create_custom_auth(my_custom_auth)
+auth_manager.register_flow("custom", custom_auth)
+
+# Authenticate
+result = auth_manager.authenticate("custom", engine, user_id="user1",
+                                 api_key="my_api_key",
+                                 secret="my_secret")
+```
+
+### Complete Authentication Example
+
+```python
+from loadspiker import Engine
+from loadspiker.authentication import (
+    get_authentication_manager, create_basic_auth, create_bearer_auth,
+    create_api_key_auth, create_form_auth
 )
 
-# Subscribe to all subtopics
-response = engine.mqtt_subscribe(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="subscriber_client", 
-    topic="sensors/#",  # Matches all topics under sensors/
-    qos=2
-)
+engine = Engine()
+auth_manager = get_authentication_manager()
+
+# Register multiple authentication methods
+auth_manager.register_flow("basic", create_basic_auth("user", "pass"))
+auth_manager.register_flow("api_key", create_api_key_auth("sk-123", "X-API-Key"))
+auth_manager.register_flow("form", create_form_auth("https://app.com/login"))
+
+# Test different authentication methods
+for user_id, auth_method in [("user1", "basic"), ("user2", "api_key"), ("user3", "form")]:
+    if auth_method == "form":
+        result = auth_manager.authenticate(auth_method, engine, user_id,
+                                         username="testuser", password="testpass")
+    else:
+        result = auth_manager.authenticate(auth_method, engine, user_id)
+    
+    print(f"{user_id} authenticated with {auth_method}: {result['success']}")
+    
+    # Make authenticated request
+    if result['success']:
+        headers = auth_manager.get_auth_headers(user_id)
+        response = engine.execute_request(
+            url="https://api.example.com/protected",
+            headers=headers
+        )
+        print(f"Protected resource access: {response['status_code']}")
 ```
 
-#### mqtt_unsubscribe
+### Integration with Engine
+
+When session management and authentication are available, the LoadSpiker engine automatically integrates them:
 
 ```python
-mqtt_unsubscribe(
-    broker_host: str,
-    broker_port: int = 1883,
-    client_id: str = "loadspiker_client",
-    topic: str = ""
-) -> Dict[str, Any]
+from loadspiker import Engine
+
+engine = Engine()
+
+# Check if session management is available
+if hasattr(engine._engine, 'session_manager') and engine._engine.session_manager:
+    print("Session management is integrated")
+    
+    # Session manager is automatically used for request preparation
+    # and response processing when available
+
+if hasattr(engine._engine, 'auth_manager') and engine._engine.auth_manager:
+    print("Authentication manager is integrated")
+    
+    # Authentication flows can be used directly with the engine
 ```
-
-Unsubscribe from an MQTT topic.
-
-**Parameters:**
-- `broker_host` (str): MQTT broker hostname or IP address
-- `broker_port` (int): MQTT broker port
-- `client_id` (str): MQTT client identifier
-- `topic` (str): MQTT topic to unsubscribe from
-
-**Returns:**
-Dictionary containing unsubscription response data.
-
-**Example:**
-```python
-response = engine.mqtt_unsubscribe(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="subscriber_client",
-    topic="sensors/temperature"
-)
-```
-
-#### mqtt_disconnect
-
-```python
-mqtt_disconnect(
-    broker_host: str,
-    broker_port: int = 1883,
-    client_id: str = "loadspiker_client"
-) -> Dict[str, Any]
-```
-
-Disconnect from an MQTT broker.
-
-**Parameters:**
-- `broker_host` (str): MQTT broker hostname or IP address
-- `broker_port` (int): MQTT broker port
-- `client_id` (str): MQTT client identifier
-
-**Returns:**
-Dictionary containing disconnection response data.
-
-**Example:**
-```python
-response = engine.mqtt_disconnect(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="test_client"
-)
-```
-
-### TCP Socket Methods
-
-#### tcp_connect
-
-```python
-tcp_connect(hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]
-```
-
-Connect to a TCP server for load testing.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-- `timeout_ms` (int): Connection timeout in milliseconds
-
-**Returns:**
-Dictionary containing connection response data.
-
-#### tcp_send
-
-```python
-tcp_send(hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]
-```
-
-Send data to a TCP connection.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-- `data` (str): Data to send
-- `timeout_ms` (int): Send timeout in milliseconds
-
-**Returns:**
-Dictionary containing send response data.
-
-#### tcp_receive
-
-```python
-tcp_receive(hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]
-```
-
-Receive data from a TCP connection.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-- `timeout_ms` (int): Receive timeout in milliseconds
-
-**Returns:**
-Dictionary containing received data.
-
-#### tcp_disconnect
-
-```python
-tcp_disconnect(hostname: str, port: int) -> Dict[str, Any]
-```
-
-Disconnect from a TCP server.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-
-**Returns:**
-Dictionary containing disconnection response data.
-
-### UDP Socket Methods
-
-#### udp_create_endpoint
-
-```python
-udp_create_endpoint(hostname: str, port: int) -> Dict[str, Any]
-```
-
-Create a UDP endpoint for communication.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-
-**Returns:**
-Dictionary containing endpoint creation response data.
-
-#### udp_send
-
-```python
-udp_send(hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]
-```
-
-Send data via UDP.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-- `data` (str): Data to send
-- `timeout_ms` (int): Send timeout in milliseconds
-
-**Returns:**
-Dictionary containing send response data.
-
-#### udp_receive
-
-```python
-udp_receive(hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]
-```
-
-Receive data via UDP.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-- `timeout_ms` (int): Receive timeout in milliseconds
-
-**Returns:**
-Dictionary containing received data and sender information.
-
-#### udp_close_endpoint
-
-```python
-udp_close_endpoint(hostname: str, port: int) -> Dict[str, Any]
-```
-
-Close a UDP endpoint.
-
-**Parameters:**
-- `hostname` (str): Target hostname or IP address
-- `port` (int): Target port number
-
-**Returns:**
-Dictionary containing endpoint closure response data.
 
 ## Scenarios
 
@@ -603,26 +680,6 @@ post(
 
 Add a POST request to the scenario.
 
-##### put
-
-```python
-put(
-    url: str,
-    body: str = "",
-    headers: Optional[Dict[str, str]] = None
-) -> None
-```
-
-Add a PUT request to the scenario.
-
-##### delete
-
-```python
-delete(url: str, headers: Optional[Dict[str, str]] = None) -> None
-```
-
-Add a DELETE request to the scenario.
-
 **Example:**
 ```python
 from LoadSpiker import Scenario
@@ -632,102 +689,6 @@ scenario.get("https://api.example.com/users")
 scenario.post("https://api.example.com/users", body='{"name": "Test"}')
 scenario.put("https://api.example.com/users/1", body='{"name": "Updated"}')
 scenario.delete("https://api.example.com/users/1")
-```
-
-### MQTTScenario
-
-Specialized scenario class for MQTT load testing with pre-built test patterns.
-
-```python
-MQTTScenario(broker_host: str, broker_port: int = 1883, client_id: str = "loadspiker_client", name: str = "MQTT Test")
-```
-
-**Parameters:**
-- `broker_host` (str): MQTT broker hostname or IP address
-- `broker_port` (int): MQTT broker port (default: 1883)
-- `client_id` (str): MQTT client identifier
-- `name` (str): Scenario name for reporting
-
-#### Methods
-
-##### add_publish_test
-
-```python
-add_publish_test(topic: str, payload: str = "Test message", qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
-```
-
-Add a complete publish test (connect, publish, disconnect).
-
-##### add_subscribe_test
-
-```python
-add_subscribe_test(topic: str, qos: int = 0, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
-```
-
-Add a complete subscribe test (connect, subscribe, unsubscribe, disconnect).
-
-##### add_pub_sub_test
-
-```python
-add_pub_sub_test(topic: str, payload: str = "Test message", qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
-```
-
-Add a complete publish-subscribe test.
-
-##### add_burst_publish_test
-
-```python
-add_burst_publish_test(topic: str, message_count: int = 10, base_payload: str = "Burst message", qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
-```
-
-Add a burst publish test for high-throughput scenarios.
-
-##### add_topic_pattern_test
-
-```python
-add_topic_pattern_test(topic_pattern: str, payload: str = "Pattern test", topic_count: int = 5, qos: int = 0, retain: bool = False, username: str = "", password: str = "", keep_alive: int = 60) -> MQTTScenario
-```
-
-Add a topic pattern test with multiple topics matching wildcards.
-
-**MQTT Scenario Example:**
-```python
-from loadspiker.scenarios import MQTTScenario
-from loadspiker import Engine
-
-# Create MQTT scenario
-scenario = MQTTScenario(
-    broker_host="test.mosquitto.org",
-    broker_port=1883,
-    client_id="loadspiker_test",
-    name="IoT Sensor Test"
-)
-
-# Add different test patterns
-scenario.add_publish_test(
-    topic="sensors/temperature",
-    payload="25.3",
-    qos=1
-)
-
-scenario.add_burst_publish_test(
-    topic="sensors/data",
-    message_count=50,
-    base_payload="sensor reading",
-    qos=0
-)
-
-scenario.add_topic_pattern_test(
-    topic_pattern="devices/+/status",
-    payload="online",
-    topic_count=10,
-    qos=1,
-    retain=True
-)
-
-# Execute the scenario
-engine = Engine()
-results = engine.run_scenario(scenario, users=20, duration=120)
 ```
 
 ## Assertions
@@ -744,18 +705,6 @@ Validates HTTP status codes against expected values.
 StatusCodeAssertion(expected_status: int, message: str = "")
 ```
 
-**Parameters:**
-- `expected_status` (int): Expected HTTP status code
-- `message` (str): Custom error message for assertion failures
-
-**Example:**
-```python
-from loadspiker.assertions import StatusCodeAssertion
-
-assertion = StatusCodeAssertion(200, "Expected successful response")
-success = assertion.check(response)
-```
-
 #### ResponseTimeAssertion
 
 Validates response time is within acceptable limits.
@@ -764,158 +713,12 @@ Validates response time is within acceptable limits.
 ResponseTimeAssertion(max_time_ms: int, message: str = "")
 ```
 
-**Parameters:**
-- `max_time_ms` (int): Maximum acceptable response time in milliseconds
-- `message` (str): Custom error message for assertion failures
-
-#### BodyContainsAssertion
-
-Validates that response body contains specific text.
-
-```python
-BodyContainsAssertion(expected_text: str, case_sensitive: bool = True, message: str = "")
-```
-
-**Parameters:**
-- `expected_text` (str): Text that should be present in response body
-- `case_sensitive` (bool): Whether search should be case sensitive
-- `message` (str): Custom error message for assertion failures
-
-#### RegexAssertion
-
-Validates response body against regular expression patterns.
-
-```python
-RegexAssertion(pattern: str, message: str = "")
-```
-
-**Parameters:**
-- `pattern` (str): Regular expression pattern to match
-- `message` (str): Custom error message for assertion failures
-
 #### JSONPathAssertion
 
 Validates JSON responses using JSONPath-like syntax.
 
 ```python
 JSONPathAssertion(path: str, expected_value: Any = None, exists: bool = True, message: str = "")
-```
-
-**Parameters:**
-- `path` (str): JSONPath to validate (e.g., "user.name", "items[0].id")
-- `expected_value` (Any): Expected value at the path (optional)
-- `exists` (bool): Whether the path should exist
-- `message` (str): Custom error message for assertion failures
-
-**Example:**
-```python
-from loadspiker.assertions import JSONPathAssertion
-
-# Check if user.id exists
-id_assertion = JSONPathAssertion("user.id", exists=True)
-
-# Check if user.name equals "John"
-name_assertion = JSONPathAssertion("user.name", "John")
-
-# Check array element
-item_assertion = JSONPathAssertion("items[0].price", 29.99)
-```
-
-#### HeaderAssertion
-
-Validates HTTP response headers.
-
-```python
-HeaderAssertion(header_name: str, expected_value: str = None, exists: bool = True, message: str = "")
-```
-
-**Parameters:**
-- `header_name` (str): Name of the header to check
-- `expected_value` (str): Expected header value (optional)
-- `exists` (bool): Whether the header should exist
-- `message` (str): Custom error message for assertion failures
-
-#### CustomAssertion
-
-Allows custom validation logic using user-defined functions.
-
-```python
-CustomAssertion(assertion_func: Callable[[Dict[str, Any]], bool], message: str = "")
-```
-
-**Parameters:**
-- `assertion_func` (Callable): Function that takes response dict and returns bool
-- `message` (str): Custom error message for assertion failures
-
-**Example:**
-```python
-from loadspiker.assertions import CustomAssertion
-
-def check_response_size(response):
-    body_size = len(response.get('body', ''))
-    return 100 < body_size < 10000
-
-size_assertion = CustomAssertion(check_response_size, "Response size should be reasonable")
-```
-
-### Assertion Groups
-
-#### AssertionGroup
-
-Groups multiple assertions with AND/OR logic.
-
-```python
-AssertionGroup(logic: str = "AND")
-```
-
-**Parameters:**
-- `logic` (str): Logic operator ("AND" or "OR")
-
-**Methods:**
-
-##### add
-
-```python
-add(assertion: Assertion) -> AssertionGroup
-```
-
-Add an assertion to the group.
-
-##### check_all
-
-```python
-check_all(response: Dict[str, Any]) -> bool
-```
-
-Check all assertions in the group according to the logic operator.
-
-##### get_failure_report
-
-```python
-get_failure_report() -> str
-```
-
-Get detailed failure report for failed assertions.
-
-**Example:**
-```python
-from loadspiker.assertions import AssertionGroup, status_is, response_time_under, body_contains
-
-# AND group - all must pass
-and_group = AssertionGroup("AND")
-and_group.add(status_is(200))
-and_group.add(response_time_under(1000))
-and_group.add(body_contains("success"))
-
-success = and_group.check_all(response)
-if not success:
-    print(and_group.get_failure_report())
-
-# OR group - at least one must pass
-or_group = AssertionGroup("OR")
-or_group.add(status_is(200))
-or_group.add(status_is(201))
-or_group.add(status_is(202))
 ```
 
 ### Convenience Functions
@@ -938,22 +741,6 @@ response_time_under(max_ms: int, message: str = "") -> ResponseTimeAssertion
 
 Create a response time assertion.
 
-#### body_contains
-
-```python
-body_contains(text: str, case_sensitive: bool = True, message: str = "") -> BodyContainsAssertion
-```
-
-Create a body content assertion.
-
-#### body_matches
-
-```python
-body_matches(pattern: str, message: str = "") -> RegexAssertion
-```
-
-Create a regex pattern assertion.
-
 #### json_path
 
 ```python
@@ -961,22 +748,6 @@ json_path(path: str, expected_value: Any = None, exists: bool = True, message: s
 ```
 
 Create a JSON path assertion.
-
-#### header_exists
-
-```python
-header_exists(name: str, value: str = None, message: str = "") -> HeaderAssertion
-```
-
-Create a header assertion.
-
-#### custom_assertion
-
-```python
-custom_assertion(func: Callable[[Dict[str, Any]], bool], message: str = "") -> CustomAssertion
-```
-
-Create a custom assertion.
 
 ### Running Assertions
 
@@ -987,14 +758,6 @@ run_assertions(response: Dict[str, Any], assertions: List[Assertion], fail_fast:
 ```
 
 Run a list of assertions against a response.
-
-**Parameters:**
-- `response` (Dict[str, Any]): HTTP response dictionary
-- `assertions` (List[Assertion]): List of assertions to check
-- `fail_fast` (bool): Stop on first failure if True
-
-**Returns:**
-- Tuple of (success: bool, failure_messages: List[str])
 
 **Example:**
 ```python
@@ -1024,48 +787,13 @@ else:
     print("All assertions passed!")
 ```
 
-### Integration with Scenarios
-
-Assertions can be integrated with scenario systems for automated testing:
-
-```python
-from loadspiker import Engine, Scenario
-from loadspiker.assertions import status_is, json_path, response_time_under
-
-engine = Engine()
-scenario = Scenario("User API Test")
-
-# Add requests with assertions to scenario
-scenario.get("https://api.example.com/users", assertions=[
-    status_is(200),
-    response_time_under(500),
-    json_path("users", exists=True)
-])
-
-scenario.post("https://api.example.com/users", 
-              body='{"name": "Test User"}',
-              assertions=[
-                  status_is(201),
-                  json_path("user.id", exists=True),
-                  json_path("user.name", "Test User")
-              ])
-
-# Run scenario with assertions
-results = engine.run_scenario(scenario, users=10, duration=60)
-```
-
 ## Performance Assertions
 
-The LoadSpiker performance assertion system provides comprehensive validation of aggregate performance metrics from load testing scenarios. Unlike regular assertions that validate individual responses, performance assertions evaluate overall test performance against defined thresholds.
+The LoadSpiker performance assertion system provides comprehensive validation of aggregate performance metrics from load testing scenarios.
 
 ### Overview
 
-Performance assertions analyze aggregated metrics such as throughput, response times, error rates, and success rates to determine if a load test meets performance requirements. This enables:
-
-- **SLA Validation**: Ensure your application meets service level agreements
-- **Performance Regression Detection**: Catch performance degradations early
-- **Capacity Planning**: Validate system capacity under load
-- **CI/CD Integration**: Automated performance gates in deployment pipelines
+Performance assertions analyze aggregated metrics such as throughput, response times, error rates, and success rates to determine if a load test meets performance requirements.
 
 ### Core Performance Assertion Classes
 
@@ -1077,19 +805,6 @@ Validates that the system maintains a minimum throughput (requests per second).
 ThroughputAssertion(min_rps: float, message: str = "")
 ```
 
-**Parameters:**
-- `min_rps` (float): Minimum required requests per second
-- `message` (str): Custom error message for assertion failures
-
-**Example:**
-```python
-from loadspiker.performance_assertions import ThroughputAssertion
-
-# Require at least 100 RPS
-throughput_check = ThroughputAssertion(100.0, "System must handle at least 100 RPS")
-success = throughput_check.check_metrics(metrics)
-```
-
 #### AverageResponseTimeAssertion
 
 Validates that average response time stays below acceptable limits.
@@ -1097,10 +812,6 @@ Validates that average response time stays below acceptable limits.
 ```python
 AverageResponseTimeAssertion(max_avg_ms: float, message: str = "")
 ```
-
-**Parameters:**
-- `max_avg_ms` (float): Maximum acceptable average response time in milliseconds
-- `message` (str): Custom error message for assertion failures
 
 #### ErrorRateAssertion
 
@@ -1110,142 +821,7 @@ Validates that error rate stays below acceptable thresholds.
 ErrorRateAssertion(max_error_rate: float, message: str = "")
 ```
 
-**Parameters:**
-- `max_error_rate` (float): Maximum acceptable error rate as a percentage (0-100)
-- `message` (str): Custom error message for assertion failures
-
-#### SuccessRateAssertion
-
-Validates that success rate meets minimum requirements.
-
-```python
-SuccessRateAssertion(min_success_rate: float, message: str = "")
-```
-
-**Parameters:**
-- `min_success_rate` (float): Minimum required success rate as a percentage (0-100)
-- `message` (str): Custom error message for assertion failures
-
-#### MaxResponseTimeAssertion
-
-Validates that maximum response time stays below acceptable limits.
-
-```python
-MaxResponseTimeAssertion(max_time_ms: float, message: str = "")
-```
-
-**Parameters:**
-- `max_time_ms` (float): Maximum acceptable response time in milliseconds
-- `message` (str): Custom error message for assertion failures
-
-#### TotalRequestsAssertion
-
-Validates that a minimum number of requests were processed (useful for ensuring test completion).
-
-```python
-TotalRequestsAssertion(min_requests: int, message: str = "")
-```
-
-**Parameters:**
-- `min_requests` (int): Minimum required number of total requests
-- `message` (str): Custom error message for assertion failures
-
-#### CustomPerformanceAssertion
-
-Allows custom performance validation logic using user-defined functions.
-
-```python
-CustomPerformanceAssertion(assertion_func: Callable[[Dict[str, Any]], bool], message: str = "")
-```
-
-**Parameters:**
-- `assertion_func` (Callable): Function that takes metrics dict and returns bool
-- `message` (str): Custom error message for assertion failures
-
-**Example:**
-```python
-from loadspiker.performance_assertions import CustomPerformanceAssertion
-
-def check_performance_ratio(metrics):
-    """Custom assertion: Check if RPS to avg response time ratio is acceptable"""
-    rps = metrics.get('requests_per_second', 0.0)
-    avg_time = metrics.get('avg_response_time_ms', 0.0)
-    if avg_time == 0:
-        return True
-    ratio = rps / avg_time
-    return ratio > 0.1  # At least 0.1 RPS per ms of response time
-
-ratio_assertion = CustomPerformanceAssertion(
-    check_performance_ratio,
-    "Performance ratio (RPS/avg_response_time) should be > 0.1"
-)
-```
-
-### Performance Assertion Groups
-
-#### PerformanceAssertionGroup
-
-Groups multiple performance assertions with AND/OR logic for complex validation scenarios.
-
-```python
-PerformanceAssertionGroup(logic: str = "AND")
-```
-
-**Parameters:**
-- `logic` (str): Logic operator ("AND" or "OR")
-
-**Methods:**
-
-##### add
-
-```python
-add(assertion: PerformanceAssertion) -> PerformanceAssertionGroup
-```
-
-Add a performance assertion to the group.
-
-##### check_all_metrics
-
-```python
-check_all_metrics(metrics: Dict[str, Any]) -> bool
-```
-
-Check all assertions in the group against metrics according to the logic operator.
-
-##### get_failure_report
-
-```python
-get_failure_report() -> str
-```
-
-Get detailed failure report for failed assertions.
-
-**Example:**
-```python
-from loadspiker.performance_assertions import (
-    PerformanceAssertionGroup, throughput_at_least, 
-    avg_response_time_under, error_rate_below
-)
-
-# AND group - all must pass for production readiness
-production_ready = PerformanceAssertionGroup("AND")
-production_ready.add(throughput_at_least(50.0, "Must handle 50+ RPS"))
-production_ready.add(avg_response_time_under(500.0, "Avg response < 500ms"))
-production_ready.add(error_rate_below(1.0, "Error rate < 1%"))
-
-success = production_ready.check_all_metrics(metrics)
-if not success:
-    print(production_ready.get_failure_report())
-
-# OR group - at least one must pass for basic functionality
-basic_functionality = PerformanceAssertionGroup("OR")
-basic_functionality.add(throughput_at_least(1.0))
-basic_functionality.add(error_rate_below(50.0))
-```
-
 ### Convenience Functions
-
-LoadSpiker provides convenience functions for creating common performance assertions:
 
 #### throughput_at_least
 
@@ -1271,38 +847,6 @@ error_rate_below(max_rate: float, message: str = "") -> ErrorRateAssertion
 
 Create an error rate assertion.
 
-#### success_rate_at_least
-
-```python
-success_rate_at_least(min_rate: float, message: str = "") -> SuccessRateAssertion
-```
-
-Create a success rate assertion.
-
-#### max_response_time_under
-
-```python
-max_response_time_under(max_ms: float, message: str = "") -> MaxResponseTimeAssertion
-```
-
-Create a maximum response time assertion.
-
-#### total_requests_at_least
-
-```python
-total_requests_at_least(min_requests: int, message: str = "") -> TotalRequestsAssertion
-```
-
-Create a total requests assertion.
-
-#### custom_performance_assertion
-
-```python
-custom_performance_assertion(func: Callable[[Dict[str, Any]], bool], message: str = "") -> CustomPerformanceAssertion
-```
-
-Create a custom performance assertion.
-
 ### Running Performance Assertions
 
 #### run_performance_assertions
@@ -1317,171 +861,39 @@ run_performance_assertions(
 
 Run a list of performance assertions against metrics.
 
-**Parameters:**
-- `metrics` (Dict[str, Any]): Performance metrics dictionary from load test
-- `assertions` (List[PerformanceAssertion]): List of performance assertions to check
-- `fail_fast` (bool): Stop on first failure if True
-
-**Returns:**
-- Tuple of (success: bool, failure_messages: List[str])
-
 ### Complete Example
-
-Here's a comprehensive example showing how to use performance assertions with load testing:
 
 ```python
 from loadspiker import Engine, Scenario
 from loadspiker.performance_assertions import (
     throughput_at_least, avg_response_time_under, error_rate_below,
-    success_rate_at_least, max_response_time_under, total_requests_at_least,
-    PerformanceAssertionGroup, run_performance_assertions
+    run_performance_assertions
 )
 
 # Create engine and scenario
 engine = Engine(max_connections=100, worker_threads=8)
 scenario = Scenario("API Performance Test")
 scenario.get("https://api.example.com/users")
-scenario.post("https://api.example.com/users", body='{"name": "Test User"}')
 
 # Run load test
-print("Running load test...")
 results = engine.run_scenario(scenario, users=50, duration=120)
 
 # Define performance requirements
 performance_requirements = [
     throughput_at_least(10.0, "Must handle at least 10 requests per second"),
     avg_response_time_under(1000.0, "Average response time must be under 1 second"),
-    max_response_time_under(5000.0, "Maximum response time must be under 5 seconds"),
-    error_rate_below(5.0, "Error rate must be below 5%"),
-    success_rate_at_least(95.0, "Success rate must be at least 95%"),
-    total_requests_at_least(100, "Test must process at least 100 requests")
+    error_rate_below(5.0, "Error rate must be below 5%")
 ]
 
 # Check performance requirements
-print("\nValidating performance requirements...")
 success, failures = run_performance_assertions(results, performance_requirements)
 
 if success:
     print("✅ All performance requirements met!")
-    print(f"Throughput: {results['requests_per_second']:.2f} RPS")
-    print(f"Average Response Time: {results['avg_response_time_ms']:.2f}ms")
-    print(f"Error Rate: {(results['failed_requests']/results['total_requests']*100):.2f}%")
 else:
     print("❌ Performance requirements not met:")
     for failure in failures:
         print(f"  - {failure}")
-
-# Advanced example with assertion groups
-print("\nChecking production readiness...")
-
-# Production-ready criteria (all must pass)
-production_criteria = PerformanceAssertionGroup("AND")
-production_criteria.add(throughput_at_least(25.0, "Production needs 25+ RPS"))
-production_criteria.add(avg_response_time_under(500.0, "Production needs <500ms avg"))
-production_criteria.add(error_rate_below(1.0, "Production needs <1% errors"))
-
-# Basic functionality criteria (at least one must pass)
-basic_criteria = PerformanceAssertionGroup("OR")
-basic_criteria.add(throughput_at_least(1.0, "Basic: at least 1 RPS"))
-basic_criteria.add(success_rate_at_least(50.0, "Basic: at least 50% success"))
-
-prod_ready = production_criteria.check_all_metrics(results)
-basic_working = basic_criteria.check_all_metrics(results)
-
-print(f"Production Ready: {'✅' if prod_ready else '❌'}")
-print(f"Basic Functionality: {'✅' if basic_working else '❌'}")
-
-if not prod_ready:
-    print("\nProduction readiness issues:")
-    print(production_criteria.get_failure_report())
-```
-
-### Metrics Dictionary Format
-
-Performance assertions expect metrics in the following format:
-
-```python
-metrics = {
-    'total_requests': int,           # Total number of requests made
-    'successful_requests': int,      # Number of successful requests (2xx/3xx status)
-    'failed_requests': int,          # Number of failed requests (4xx/5xx/timeouts)
-    'requests_per_second': float,    # Current throughput (RPS)
-    'avg_response_time_ms': float,   # Average response time in milliseconds
-    'max_response_time_us': int,     # Maximum response time in microseconds
-    'min_response_time_us': int      # Minimum response time in microseconds (optional)
-}
-```
-
-### Best Practices
-
-#### Setting Realistic Thresholds
-
-1. **Baseline Testing**: Run initial tests to understand current performance
-2. **SLA Alignment**: Set thresholds based on actual SLA requirements
-3. **Environment Considerations**: Adjust thresholds for test vs production environments
-4. **Gradual Tightening**: Start with loose thresholds and tighten over time
-
-#### Combining Assertions
-
-```python
-# Common patterns for different scenarios
-
-# High-performance API requirements
-api_performance = [
-    throughput_at_least(100.0),
-    avg_response_time_under(200.0),
-    error_rate_below(0.1),
-    max_response_time_under(1000.0)
-]
-
-# Basic web application requirements
-web_performance = [
-    throughput_at_least(10.0),
-    avg_response_time_under(2000.0),
-    error_rate_below(5.0),
-    success_rate_at_least(95.0)
-]
-
-# Stress test validation (ensuring graceful degradation)
-stress_test_validation = [
-    error_rate_below(20.0),  # Allow higher error rates under stress
-    total_requests_at_least(1000),  # Ensure test actually ran
-    # Custom assertion for graceful degradation
-    custom_performance_assertion(
-        lambda m: m.get('avg_response_time_ms', 0) < m.get('max_response_time_us', 0) / 1000 * 2,
-        "Average response time should not be too close to maximum"
-    )
-]
-```
-
-#### CI/CD Integration
-
-```python
-# Example for CI/CD pipeline integration
-def validate_deployment_performance():
-    """Performance gate for deployment pipeline"""
-    
-    # Run smoke test
-    results = run_smoke_test()
-    
-    # Define deployment criteria
-    deployment_gate = [
-        throughput_at_least(5.0, "Deployment: minimum 5 RPS"),
-        avg_response_time_under(3000.0, "Deployment: avg response < 3s"),
-        error_rate_below(10.0, "Deployment: error rate < 10%"),
-        success_rate_at_least(90.0, "Deployment: success rate >= 90%")
-    ]
-    
-    success, failures = run_performance_assertions(results, deployment_gate)
-    
-    if not success:
-        print("🚫 Deployment blocked due to performance issues:")
-        for failure in failures:
-            print(f"   {failure}")
-        return False
-    
-    print("✅ Performance gate passed - deployment approved")
-    return True
 ```
 
 ## Reporters
@@ -1495,32 +907,6 @@ Real-time console output during test execution.
 ```python
 ConsoleReporter(show_progress: bool = True)
 ```
-
-#### Methods
-
-##### start_reporting
-
-```python
-start_reporting() -> None
-```
-
-Begin real-time reporting.
-
-##### report_metrics
-
-```python
-report_metrics(metrics: Dict[str, Any]) -> None
-```
-
-Display current metrics.
-
-##### end_reporting
-
-```python
-end_reporting() -> None
-```
-
-Stop reporting and show final summary.
 
 ### JSONReporter
 
@@ -1536,24 +922,6 @@ Generate HTML reports with charts and graphs.
 
 ```python
 HTMLReporter(filename: str)
-```
-
-**Example:**
-```python
-from LoadSpiker.reporters import ConsoleReporter, JSONReporter, HTMLReporter
-
-# Use multiple reporters
-console_reporter = ConsoleReporter(show_progress=True)
-json_reporter = JSONReporter("results.json")
-html_reporter = HTMLReporter("report.html")
-
-console_reporter.start_reporting()
-# Run your tests here
-metrics = engine.get_metrics()
-console_reporter.report_metrics(metrics)
-json_reporter.report_metrics(metrics)
-html_reporter.report_metrics(metrics)
-console_reporter.end_reporting()
 ```
 
 ## Utilities
@@ -1584,23 +952,6 @@ constant_load(users: int, duration: int) -> Iterator[Tuple[int, int]]
 
 Generate a constant load pattern.
 
-**Example:**
-```python
-from LoadSpiker.utils import ramp_up, spike_test, constant_load
-
-# Gradual ramp-up from 1 to 100 users over 5 minutes
-for users, duration in ramp_up(1, 100, 300):
-    results = engine.run_scenario(scenario, users, duration)
-
-# Spike test: 20 base users, spike to 100 for 60 seconds
-for users, duration in spike_test(20, 100, 60, 120):
-    results = engine.run_scenario(scenario, users, duration)
-
-# Constant load of 50 users for 10 minutes
-for users, duration in constant_load(50, 600):
-    results = engine.run_scenario(scenario, users, duration)
-```
-
 ## Error Handling
 
 All methods may raise the following exceptions:
@@ -1608,52 +959,6 @@ All methods may raise the following exceptions:
 - `RuntimeError`: For engine initialization or request execution failures
 - `ValueError`: For invalid parameter values
 - `ImportError`: If the C extension module cannot be loaded
-
-**Example:**
-```python
-try:
-    engine = Engine(max_connections=1000, worker_threads=10)
-    response = engine.execute_request("https://api.example.com/test")
-except RuntimeError as e:
-    print(f"Engine error: {e}")
-except ImportError as e:
-    print(f"Module import error: {e}")
-```
-
-## Testing
-
-### Comprehensive Test Suite
-
-LoadSpiker includes an exhaustive pytest-based test suite for performance assertions with **99 comprehensive tests** covering all functionality:
-
-#### Running Tests
-```bash
-# Install pytest (if not already installed)
-pip install pytest
-
-# Run the complete performance assertion test suite
-python -m pytest tests/test_performance_assertions.py -v
-
-# Expected output: 99 tests passed
-```
-
-#### Test Coverage
-- **Base Class Testing (6 tests)**: Initialization, error handling, abstract methods
-- **Individual Assertion Testing (42 tests)**: All 7 assertion types with pass/fail scenarios
-- **Group Logic Testing (10 tests)**: AND/OR logic, chaining, failure reporting
-- **Convenience Functions Testing (7 tests)**: Helper function validation
-- **Batch Processing Testing (6 tests)**: `run_performance_assertions` with various options
-- **Edge Cases Testing (6 tests)**: Large/small numbers, None values, float precision
-- **Integration Scenarios Testing (6 tests)**: Real-world use cases and workflows
-
-#### Test Categories
-
-**Regression Testing**: Protects against future code changes
-**Production Scenarios**: SLA validation, deployment gates, stress testing
-**Error Handling**: None values, missing keys, invalid inputs
-**Performance**: Boundary conditions, edge cases
-
-The test suite serves as both validation and executable documentation, demonstrating proper usage patterns and expected behaviors for all performance assertion features.
 
 ## Best Practices
 
@@ -1670,15 +975,16 @@ The test suite serves as both validation and executable documentation, demonstra
 - Multiple threads can call `execute_request()` concurrently
 - Metrics are automatically synchronized across threads
 
-### Resource Management
+### Session Management Best Practices
 
-Always clean up resources properly:
+1. **Session Isolation**: Use unique user IDs for each virtual user to maintain proper session isolation
+2. **Cookie Management**: Let LoadSpiker handle cookies automatically, only manually manage when necessary
+3. **Token Expiration**: Monitor token expiration times and refresh when needed
+4. **Request Correlation**: Use correlation rules to extract dynamic values for realistic testing
 
-```python
-try:
-    engine = Engine(max_connections=100, worker_threads=4)
-    # Run your tests
-    results = engine.run_scenario(scenario, users=10, duration=60)
-finally:
-    # Engine cleanup is handled automatically
-    pass
+### Authentication Best Practices
+
+1. **Authentication Flow Selection**: Choose the appropriate authentication method based on your application
+2. **Token Management**: Store sensitive tokens securely and use proper expiration handling
+3. **Multi-User Testing**: Test with multiple authentication scenarios to simulate real user behavior
+4. **Session Validation**: Verify authentication state before making protected requests

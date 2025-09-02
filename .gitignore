@@ -30,6 +30,11 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Virtual environment
+.venv/
+venv/
+env/
+
 # Test files
 test_*.html
 test_*.json

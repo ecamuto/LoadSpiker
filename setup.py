@@ -1,18 +1,35 @@
 from setuptools import setup, Extension
-import pkg_config
+import subprocess
+import sys
 
-# Get curl flags from pkg-config
-curl_cflags = pkg_config.parse('libcurl')['cflags']
-curl_libs = pkg_config.parse('libcurl')['libs']
+def get_pkg_config_flags(package):
+    """Get pkg-config flags with fallback"""
+    try:
+        cflags = subprocess.check_output(['pkg-config', '--cflags', package]).decode().strip().split()
+        libs = subprocess.check_output(['pkg-config', '--libs', package]).decode().strip().split()
+        return cflags, libs
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(f"Warning: pkg-config not found or {package} not available, using fallback")
+        if package == 'libcurl':
+            return ['-I/usr/include/curl'], ['-lcurl']
+        return [], []
+
+# Get curl flags
+curl_cflags, curl_libs = get_pkg_config_flags('libcurl')
 
 loadtest_extension = Extension(
     'loadtest',
     sources=[
         'src/python_extension.c',
-        'src/engine.c'
+        'src/engine.c',
+        'src/protocols/tcp.c',
+        'src/protocols/udp.c', 
+        'src/protocols/mqtt.c',
+        'src/protocols/database.c',
+        'src/protocols/websocket.c'
     ],
-    include_dirs=['src'],
-    extra_compile_args=curl_cflags + ['-O3', '-pthread'],
+    include_dirs=['src', 'src/protocols'],
+    extra_compile_args=curl_cflags + ['-O2', '-pthread', '-std=c11'],
     extra_link_args=curl_libs + ['-pthread'],
     define_macros=[('_GNU_SOURCE', None)]
 )

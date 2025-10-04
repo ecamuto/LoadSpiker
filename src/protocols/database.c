@@ -1,8 +1,8 @@
 #include "database.h"
+#include "../common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/time.h>
 #include <unistd.h>
 
 // Connection pool for database connections
@@ -10,11 +10,6 @@
 static db_connection_t db_connections[MAX_DB_CONNECTIONS];
 static int db_connection_count = 0;
 
-static uint64_t get_time_us() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000ULL + tv.tv_usec;
-}
 
 db_type_t database_parse_type(const char* db_type_str) {
     if (!db_type_str) return DB_TYPE_UNKNOWN;

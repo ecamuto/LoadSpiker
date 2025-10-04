@@ -2,6 +2,7 @@
 #define MQTT_H
 
 #include "../engine.h"
+#include "../common.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -78,6 +79,5 @@ int mqtt_disconnect(const char* host, int port, const char* client_id, response_
 int mqtt_parse_url(const char* url, char* host, int* port, char* client_id);
 mqtt_connection_t* mqtt_find_connection(const char* host, int port, const char* client_id);
 mqtt_connection_t* mqtt_create_connection(const char* host, int port, const char* client_id);
-uint64_t get_time_us(void);
 
 #endif // MQTT_H

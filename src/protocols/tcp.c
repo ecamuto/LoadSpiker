@@ -1,8 +1,8 @@
 #include "tcp.h"
+#include "../common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -16,11 +16,6 @@
 static tcp_connection_t tcp_connections[MAX_TCP_CONNECTIONS];
 static int tcp_connection_count = 0;
 
-static uint64_t get_time_us() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000ULL + tv.tv_usec;
-}
 
 int tcp_parse_url(const char* url, char* host, int* port) {
     if (!url || !host || !port) {

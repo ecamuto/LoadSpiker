@@ -26,11 +26,6 @@ static int mqtt_connection_count = 0;
 #define MQTT_UNSUBACK    0xB0
 #define MQTT_DISCONNECT  0xE0
 
-uint64_t get_time_us(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
-}
 
 int mqtt_parse_url(const char* url, char* host, int* port, char* client_id) {
     if (!url || !host || !port || !client_id) {
@@ -246,7 +241,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     }
     
     memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_GRPC; // Using GRPC enum for now, should be PROTOCOL_MQTT
+    response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
     
     // Check if connection already exists
@@ -373,7 +368,7 @@ int mqtt_publish(const char* host, int port, const char* client_id,
     }
     
     memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_GRPC; // Using GRPC enum for now
+    response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
     
     // Find existing connection
@@ -428,7 +423,7 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
     }
     
     memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_GRPC; // Using GRPC enum for now
+    response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
     
     // Find existing connection
@@ -463,7 +458,7 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
     }
     
     memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_GRPC; // Using GRPC enum for now
+    response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
     
     // Find existing connection
@@ -491,7 +486,7 @@ int mqtt_disconnect(const char* host, int port, const char* client_id, response_
     }
     
     memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_GRPC; // Using GRPC enum for now
+    response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
     
     // Find existing connection

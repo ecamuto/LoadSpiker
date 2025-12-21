@@ -55,30 +55,23 @@ class _PlaceholderWebsiteScenario(_PlaceholderScenario):
 
 # Try to load the C extension, fall back to Python-only implementation if not available
 current_dir = os.path.dirname(__file__)
-so_path = os.path.join(current_dir, "loadspiker.so")
 
 _CEngine = None
 _c_extension_available = False
 
+# Try to import the C extension as a submodule
 try:
-    # Try to load the C extension for high performance
-    if os.path.exists(so_path):
-        # Load the C extension with a unique module name to avoid conflicts
-        spec = importlib.util.spec_from_file_location("loadspiker_c_module", so_path)
-        if spec and spec.loader:
-            c_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(c_module)
-            _CEngine = c_module.Engine
-            _c_extension_available = True
-            print("🚀 C extension loaded successfully - high performance mode enabled")
-        else:
-            raise ImportError("Could not load C extension spec")
-    else:
-        raise FileNotFoundError(f"C extension not found at {so_path}")
-except Exception as e:
-    print(f"ℹ️  C extension not available: {e}")
-    print("   Falling back to Python-only implementation")
+    from . import loadspiker_c as c_module
+    _CEngine = c_module.Engine
+    _c_extension_available = True
+    print("🚀 C extension loaded successfully - high performance mode enabled")
+except ImportError as e:
+    print(f"Debug: Failed to load C extension: {e}")
     _c_extension_available = False
+
+if not _c_extension_available:
+    print("ℹ️  C extension not available")
+    print("   Falling back to Python-only implementation")
 
 
 # Fallback Python implementation when C extension is not available

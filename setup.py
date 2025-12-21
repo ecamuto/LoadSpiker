@@ -17,8 +17,8 @@ def get_pkg_config_flags(package):
 # Get curl flags
 curl_cflags, curl_libs = get_pkg_config_flags('libcurl')
 
-loadtest_extension = Extension(
-    'loadtest',
+loadspiker_c_extension = Extension(
+    'loadspiker.loadspiker_c',
     sources=[
         'src/python_extension.c',
         'src/engine.c',
@@ -44,7 +44,7 @@ setup(
     author_email='team@loadspiker.com',
     url='https://github.com/loadspiker/loadspiker',
     packages=['loadspiker'],
-    ext_modules=[loadtest_extension],
+    ext_modules=[loadspiker_c_extension],
     scripts=['cli.py'],
     entry_points={
         'console_scripts': [

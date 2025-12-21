@@ -338,7 +338,10 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     conn->is_connected = true;
     conn->keep_alive_seconds = keep_alive_seconds;
     if (username) strncpy(conn->username, username, sizeof(conn->username) - 1);
-    if (password) strncpy(conn->password, password, sizeof(conn->password) - 1);
+    // Security: Do NOT store password after connection is established
+    // The password was already used in the CONNECT packet above
+    // Storing it in memory would be a security risk (memory dumps, core dumps, debugging)
+    memset(conn->password, 0, sizeof(conn->password));
     
     response->status_code = 200;
     response->success = true;

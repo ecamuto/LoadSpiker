@@ -329,20 +329,20 @@ static PyTypeObject LoadTestEngineType = {
     .tp_methods = LoadTestEngine_methods,
 };
 
-static PyModuleDef loadspiker_module = {
+static PyModuleDef loadspiker_c_module = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "loadspiker",
-    .m_doc = "High-performance load testing module",
+    .m_name = "loadspiker_c",
+    .m_doc = "High-performance load testing C module",
     .m_size = -1,
 };
 
-PyMODINIT_FUNC PyInit_loadspiker(void) {
+PyMODINIT_FUNC PyInit_loadspiker_c(void) {
     PyObject* m;
     
     if (PyType_Ready(&LoadTestEngineType) < 0)
         return NULL;
     
-    m = PyModule_Create(&loadspiker_module);
+    m = PyModule_Create(&loadspiker_c_module);
     if (m == NULL)
         return NULL;
     

@@ -42,4 +42,7 @@ db_type_t database_parse_type(const char* db_type_str);
 const char* database_type_to_string(db_type_t type);
 int database_parse_connection_string(const char* connection_string, char* host, int* port, char* database, char* username, char* password);
 
+// Cleanup function - resets all database connections
+void database_cleanup_all(void);
+
 #endif // DATABASE_H

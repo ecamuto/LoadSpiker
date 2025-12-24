@@ -10,4 +10,7 @@ int websocket_connect(const char* url, const char* subprotocol, response_t* resp
 int websocket_send_message(const char* url, const char* message, response_t* response);
 int websocket_close_connection(const char* url, response_t* response);
 
+// Cleanup function - frees all WebSocket connections
+void websocket_cleanup_all(void);
+
 #endif

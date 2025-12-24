@@ -318,3 +318,11 @@ int database_disconnect(const char* connection_string, response_t* response) {
     
     return 0;
 }
+
+void database_cleanup_all(void) {
+    for (int i = 0; i < db_connection_count; i++) {
+        db_connections[i].is_connected = false;
+        db_connections[i].connection_handle = NULL;
+    }
+    db_connection_count = 0;
+}

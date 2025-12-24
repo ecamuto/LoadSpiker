@@ -34,4 +34,7 @@ int tcp_parse_url(const char* url, char* host, int* port);
 tcp_connection_t* tcp_find_connection(const char* host, int port);
 tcp_connection_t* tcp_create_connection(const char* host, int port);
 
+// Cleanup function - closes all TCP connections
+void tcp_cleanup_all(void);
+
 #endif // TCP_H

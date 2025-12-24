@@ -35,4 +35,7 @@ int udp_parse_url(const char* url, char* host, int* port);
 udp_endpoint_t* udp_find_endpoint(const char* host, int port);
 udp_endpoint_t* udp_create_endpoint_struct(const char* host, int port);
 
+// Cleanup function - closes all UDP endpoints
+void udp_cleanup_all(void);
+
 #endif // UDP_H

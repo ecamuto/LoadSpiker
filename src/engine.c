@@ -691,6 +691,13 @@ void engine_destroy(engine_t* engine) {
         pthread_join(engine->workers[i].thread, NULL);
     }
     
+    // Clean up all protocol connection pools
+    tcp_cleanup_all();
+    udp_cleanup_all();
+    mqtt_cleanup_all();
+    websocket_cleanup_all();
+    database_cleanup_all();
+    
     curl_multi_cleanup(engine->multi_handle);
     curl_global_cleanup();
     

@@ -519,3 +519,17 @@ int mqtt_disconnect(const char* host, int port, const char* client_id, response_
     
     return 0;
 }
+
+void mqtt_cleanup_all(void) {
+    for (int i = 0; i < mqtt_connection_count; i++) {
+        if (mqtt_connections[i].socket_fd >= 0) {
+            // Try to send DISCONNECT packet before closing
+            char disconnect_packet[2] = {MQTT_DISCONNECT, 0x00};
+            send(mqtt_connections[i].socket_fd, disconnect_packet, 2, MSG_NOSIGNAL);
+            close(mqtt_connections[i].socket_fd);
+            mqtt_connections[i].socket_fd = -1;
+        }
+        mqtt_connections[i].is_connected = false;
+    }
+    mqtt_connection_count = 0;
+}

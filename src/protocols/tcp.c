@@ -390,3 +390,14 @@ int tcp_disconnect(const char* host, int port, response_t* response) {
     
     return 0;
 }
+
+void tcp_cleanup_all(void) {
+    for (int i = 0; i < tcp_connection_count; i++) {
+        if (tcp_connections[i].socket_fd >= 0) {
+            close(tcp_connections[i].socket_fd);
+            tcp_connections[i].socket_fd = -1;
+        }
+        tcp_connections[i].is_connected = false;
+    }
+    tcp_connection_count = 0;
+}

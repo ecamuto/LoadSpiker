@@ -80,4 +80,7 @@ int mqtt_parse_url(const char* url, char* host, int* port, char* client_id);
 mqtt_connection_t* mqtt_find_connection(const char* host, int port, const char* client_id);
 mqtt_connection_t* mqtt_create_connection(const char* host, int port, const char* client_id);
 
+// Cleanup function - closes all MQTT connections
+void mqtt_cleanup_all(void);
+
 #endif // MQTT_H

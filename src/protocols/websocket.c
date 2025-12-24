@@ -178,3 +178,14 @@ int websocket_close_connection(const char* url, response_t* response) {
     
     return 0;
 }
+
+void websocket_cleanup_all(void) {
+    pthread_mutex_lock(&ws_connections_mutex);
+    for (int i = 0; i < MAX_WS_CONNECTIONS; i++) {
+        if (ws_connections[i]) {
+            free(ws_connections[i]);
+            ws_connections[i] = NULL;
+        }
+    }
+    pthread_mutex_unlock(&ws_connections_mutex);
+}

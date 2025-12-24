@@ -369,3 +369,14 @@ int udp_close_endpoint(const char* host, int port, response_t* response) {
     
     return 0;
 }
+
+void udp_cleanup_all(void) {
+    for (int i = 0; i < udp_endpoint_count; i++) {
+        if (udp_endpoints[i].socket_fd >= 0) {
+            close(udp_endpoints[i].socket_fd);
+            udp_endpoints[i].socket_fd = -1;
+        }
+        udp_endpoints[i].is_bound = false;
+    }
+    udp_endpoint_count = 0;
+}

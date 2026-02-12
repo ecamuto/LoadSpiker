@@ -1,5 +1,25 @@
 """
 High-level Python API for the load testing engine
+
+This module provides a high-level Python interface for the LoadSpiker load testing
+engine. It automatically uses the high-performance C extension when available,
+falling back to a pure Python implementation for compatibility.
+
+Example usage:
+    from loadspiker import Engine
+    
+    engine = Engine(max_connections=1000, worker_threads=10)
+    
+    # Execute a single HTTP request
+    response = engine.execute_request(
+        url="https://api.example.com/users",
+        method="GET",
+        headers={"Authorization": "Bearer token"},
+        timeout_ms=5000
+    )
+    
+    print(f"Status: {response['status_code']}")
+    print(f"Response time: {response['response_time_ms']:.2f} ms")
 """
 
 # Import standard libraries
@@ -7,10 +27,116 @@ import sys
 import os
 import importlib.util
 import time
-from typing import List, Dict, Any, Optional, Callable, Union, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, Callable, Union, TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     from .scenarios import Scenario
+
+
+# =============================================================================
+# Type Definitions for Response Structures
+# =============================================================================
+
+class MetricsDict(TypedDict, total=False):
+    """Type definition for performance metrics returned by get_metrics()."""
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    total_response_time_us: int
+    total_response_time_ms: float
+    min_response_time_us: int
+    min_response_time_ms: float
+    max_response_time_us: int
+    max_response_time_ms: float
+    avg_response_time_ms: float
+    requests_per_second: float
+
+
+class ProtocolDataDict(TypedDict, total=False):
+    """Type definition for protocol-specific data in responses."""
+    # TCP/UDP specific
+    connection_established: bool
+    bytes_sent: int
+    bytes_received: int
+    received_data: str
+    remote_host: str
+    remote_port: int
+    
+    # WebSocket specific
+    subprotocol: str
+    messages_sent: int
+    messages_received: int
+    
+    # MQTT specific
+    topic: str
+    payload_size: int
+    qos: int
+    retain: bool
+    published: bool
+    subscribed: bool
+    unsubscribed: bool
+    broker_host: str
+    broker_port: int
+    client_id: str
+    connected: bool
+    disconnected: bool
+    
+    # Database specific
+    rows_affected: int
+    rows_returned: int
+    result_set: str
+    
+    # UDP specific
+    datagram_sent: bool
+
+
+class ResponseDict(TypedDict, total=False):
+    """
+    Type definition for response dictionaries returned by engine methods.
+    
+    All protocol methods (HTTP, TCP, UDP, MQTT, WebSocket, Database) return
+    a dictionary conforming to this structure.
+    """
+    status_code: int
+    """HTTP-style status code (200=success, 4xx=client error, 5xx=server error)."""
+    
+    headers: Union[Dict[str, str], str]
+    """Response headers (dict for parsed, string for raw)."""
+    
+    body: str
+    """Response body content."""
+    
+    response_time_us: int
+    """Response time in microseconds."""
+    
+    response_time_ms: float
+    """Response time in milliseconds."""
+    
+    success: bool
+    """True if the operation completed successfully."""
+    
+    error_message: str
+    """Error description if success is False, empty string otherwise."""
+    
+    protocol_data: ProtocolDataDict
+    """Protocol-specific response data."""
+
+
+# =============================================================================
+# Constants
+# =============================================================================
+
+#: Default timeout for HTTP requests in milliseconds
+DEFAULT_HTTP_TIMEOUT_MS: int = 30000
+
+#: Default timeout for TCP/UDP operations in milliseconds  
+DEFAULT_SOCKET_TIMEOUT_MS: int = 30000
+
+#: Default MQTT broker port
+DEFAULT_MQTT_PORT: int = 1883
+
+#: Default MQTT keep-alive interval in seconds
+DEFAULT_MQTT_KEEP_ALIVE: int = 60
 
 # Import session management and authentication
 try:

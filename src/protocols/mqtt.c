@@ -419,6 +419,36 @@ int mqtt_publish(const char* host, int port, const char* client_id,
     return 0;
 }
 
+static int mqtt_create_subscribe_packet(char* buffer, const char* topic, 
+                                       mqtt_qos_t qos, uint16_t packet_id) {
+    int pos = 0;
+    int topic_len = strlen(topic);
+    
+    // Fixed header - SUBSCRIBE with reserved bits
+    buffer[pos++] = MQTT_SUBSCRIBE;  // 0x82
+    
+    // Calculate remaining length: packet_id(2) + topic_len_field(2) + topic + qos(1)
+    int remaining_length = 2 + 2 + topic_len + 1;
+    
+    // Encode remaining length (simplified - assumes < 128)
+    buffer[pos++] = remaining_length;
+    
+    // Variable header - Packet ID
+    buffer[pos++] = (packet_id >> 8) & 0xFF;
+    buffer[pos++] = packet_id & 0xFF;
+    
+    // Payload - Topic Filter
+    buffer[pos++] = (topic_len >> 8) & 0xFF;
+    buffer[pos++] = topic_len & 0xFF;
+    memcpy(&buffer[pos], topic, topic_len);
+    pos += topic_len;
+    
+    // Requested QoS
+    buffer[pos++] = (char)qos;
+    
+    return pos;
+}
+
 int mqtt_subscribe(const char* host, int port, const char* client_id,
                   const char* topic, mqtt_qos_t qos, response_t* response) {
     if (!host || !client_id || !topic || !response) {
@@ -439,7 +469,43 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
         return -1;
     }
     
-    // Simplified SUBSCRIBE implementation
+    // Create SUBSCRIBE packet
+    char subscribe_packet[512];
+    uint16_t packet_id = conn->packet_id++;
+    int packet_len = mqtt_create_subscribe_packet(subscribe_packet, topic, qos, packet_id);
+    
+    // Send SUBSCRIBE packet
+    if (send(conn->socket_fd, subscribe_packet, packet_len, 0) < 0) {
+        response->status_code = 500;
+        response->success = false;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Failed to send SUBSCRIBE packet: %s", strerror(errno));
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    
+    // Read SUBACK response
+    char suback[5];
+    int recv_len = recv(conn->socket_fd, suback, sizeof(suback), 0);
+    if (recv_len < 0) {
+        response->status_code = 500;
+        response->success = false;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Failed to receive SUBACK: %s", strerror(errno));
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    
+    // Verify SUBACK packet type
+    if ((suback[0] & 0xF0) != MQTT_SUBACK) {
+        response->status_code = 500;
+        response->success = false;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Invalid SUBACK response (got 0x%02X)", (unsigned char)suback[0]);
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    
     response->status_code = 200;
     response->success = true;
     snprintf(response->body, sizeof(response->body),
@@ -452,6 +518,32 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
     mqtt_data->qos_level = qos;
     
     return 0;
+}
+
+static int mqtt_create_unsubscribe_packet(char* buffer, const char* topic, uint16_t packet_id) {
+    int pos = 0;
+    int topic_len = strlen(topic);
+    
+    // Fixed header - UNSUBSCRIBE with reserved bits
+    buffer[pos++] = MQTT_UNSUBSCRIBE;  // 0xA2
+    
+    // Calculate remaining length: packet_id(2) + topic_len_field(2) + topic
+    int remaining_length = 2 + 2 + topic_len;
+    
+    // Encode remaining length (simplified - assumes < 128)
+    buffer[pos++] = remaining_length;
+    
+    // Variable header - Packet ID
+    buffer[pos++] = (packet_id >> 8) & 0xFF;
+    buffer[pos++] = packet_id & 0xFF;
+    
+    // Payload - Topic Filter
+    buffer[pos++] = (topic_len >> 8) & 0xFF;
+    buffer[pos++] = topic_len & 0xFF;
+    memcpy(&buffer[pos], topic, topic_len);
+    pos += topic_len;
+    
+    return pos;
 }
 
 int mqtt_unsubscribe(const char* host, int port, const char* client_id,
@@ -470,6 +562,43 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
         response->status_code = 400;
         response->success = false;
         strcpy(response->error_message, "No active MQTT connection");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    
+    // Create UNSUBSCRIBE packet
+    char unsubscribe_packet[512];
+    uint16_t packet_id = conn->packet_id++;
+    int packet_len = mqtt_create_unsubscribe_packet(unsubscribe_packet, topic, packet_id);
+    
+    // Send UNSUBSCRIBE packet
+    if (send(conn->socket_fd, unsubscribe_packet, packet_len, 0) < 0) {
+        response->status_code = 500;
+        response->success = false;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Failed to send UNSUBSCRIBE packet: %s", strerror(errno));
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    
+    // Read UNSUBACK response
+    char unsuback[4];
+    int recv_len = recv(conn->socket_fd, unsuback, sizeof(unsuback), 0);
+    if (recv_len < 0) {
+        response->status_code = 500;
+        response->success = false;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Failed to receive UNSUBACK: %s", strerror(errno));
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    
+    // Verify UNSUBACK packet type
+    if ((unsuback[0] & 0xF0) != MQTT_UNSUBACK) {
+        response->status_code = 500;
+        response->success = false;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Invalid UNSUBACK response (got 0x%02X)", (unsigned char)unsuback[0]);
         response->response_time_us = get_time_us() - start_time;
         return -1;
     }

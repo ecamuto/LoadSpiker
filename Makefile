@@ -147,6 +147,26 @@ test: install
 	python3 -m pytest tests/ -v
 	@echo "✅ Tests completed"
 
+# Run tests with AddressSanitizer (memory error detection)
+test-asan: debug
+	@echo "🔍 Running tests with AddressSanitizer..."
+	LOADSPIKER_DEBUG=1 python3 setup.py build_ext --inplace 2>&1 | tail -1
+	ASAN_OPTIONS=detect_leaks=1:abort_on_error=0:halt_on_error=0 \
+		python3 -m pytest tests/ -v --timeout=30 2>&1 || true
+	@echo "✅ ASan tests completed"
+
+# Run all tests including slow/network tests
+test-all: install
+	@echo "🧪 Running full test suite..."
+	python3 -m pytest tests/ -v --timeout=60
+	@echo "✅ Full test suite completed"
+
+# Run benchmarks
+benchmark: install
+	@echo "📊 Running performance benchmarks..."
+	python3 benchmarks/benchmark_engine.py
+	@echo "✅ Benchmarks completed"
+
 # Run example
 example: install
 	@echo "🚀 Running example..."
@@ -190,6 +210,9 @@ help:
 	@echo "  install-deps- Install system dependencies"
 	@echo "  clean       - Clean build artifacts"
 	@echo "  test        - Run test suite"
+	@echo "  test-asan   - Run tests with AddressSanitizer"
+	@echo "  test-all    - Run full test suite with network tests"
+	@echo "  benchmark   - Run performance benchmarks"
 	@echo "  example     - Run example script"
 	@echo "  quick-test  - Quick test with httpbin"
 	@echo "  docs        - Generate documentation"

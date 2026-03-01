@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html" class="active"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Getting Started</h1>
+      <p class="page-lead">Get LoadSpiker installed and running your first load test in under 10 minutes.</p>
+
+      <h2 id="requirements">Requirements</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Requirement</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Operating System</td><td>Linux, macOS, or Windows (WSL2 recommended)</td></tr>
+          <tr><td>Python</td><td>3.7 or later</td></tr>
+          <tr><td>libcurl</td><td>Development headers required for HTTP support</td></tr>
+          <tr><td>Compiler</td><td>GCC 7+ or Clang 6+</td></tr>
+          <tr><td>Build Tool</td><td>GNU Make</td></tr>
+          <tr><td>pkg-config</td><td>Required for library detection</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="req-ubuntu">Ubuntu / Debian</h3>
+      <pre><code class="language-bash">sudo apt-get update
+sudo apt-get install -y \
+  python3 python3-dev python3-pip \
+  libcurl4-openssl-dev \
+  gcc make pkg-config \
+  build-essential</code></pre>
+
+      <h3 id="req-centos">CentOS / RHEL</h3>
+      <pre><code class="language-bash">sudo yum groupinstall "Development Tools"
+sudo yum install -y \
+  python3 python3-devel python3-pip \
+  libcurl-devel \
+  gcc make pkg-config</code></pre>
+
+      <h3 id="req-macos">macOS</h3>
+      <pre><code class="language-bash"># Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dependencies
+brew install python pkg-config curl</code></pre>
+
+      <h3 id="req-windows">Windows (WSL2)</h3>
+      <pre><code class="language-bash"># Enable WSL2 and install Ubuntu from Microsoft Store, then:
+sudo apt-get update
+sudo apt-get install -y python3 python3-dev python3-pip \
+  libcurl4-openssl-dev gcc make pkg-config build-essential</code></pre>
+
+      <h2 id="installation">Installation</h2>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Clone the repository</h4>
+            <pre><code class="language-bash">git clone https://github.com/loadspiker/loadspiker.git
+cd loadspiker</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Install system dependencies</h4>
+            <pre><code class="language-bash">make install-deps</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Build the C engine and Python extension</h4>
+            <pre><code class="language-bash">make build</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Install the Python package</h4>
+            <pre><code class="language-bash">make install
+# Or install in editable/development mode:
+pip install -e .</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h4>Verify the installation</h4>
+            <pre><code class="language-bash">python3 -c "import loadspiker; print('LoadSpiker', loadspiker.__version__)"
+loadspiker --version</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <h2 id="first-test">Your First Test</h2>
+
+      <p>Create a file named <code>my_test.py</code> and paste the following:</p>
+
+      <pre><code class="language-python">from loadspiker import Engine, Scenario
+
+# Create the engine with resource limits
+engine = Engine(max_connections=100, worker_threads=4)
+
+# Define your scenario
+scenario = Scenario("My First Load Test")
+
+# Add HTTP requests
+scenario.get("https://httpbin.org/get")
+scenario.post(
+    "https://httpbin.org/post",
+    body='{"message": "hello"}',
+    headers={"Content-Type": "application/json"}
+)
+
+# Run the test: 10 concurrent users for 60 seconds
+results = engine.run_scenario(scenario, users=10, duration=60)
+
+# Print results
+print(f"Total Requests:   {results['total_requests']}")
+print(f"Successful:       {results['successful_requests']}")
+print(f"RPS:              {results['requests_per_second']:.2f}")
+print(f"Avg Response:     {results['avg_response_time_ms']:.2f} ms")
+print(f"Min Response:     {results['min_response_time_ms']:.2f} ms")
+print(f"Max Response:     {results['max_response_time_ms']:.2f} ms")
+print(f"Error Rate:       {results['error_rate']:.2%}")
+
+# Clean up
+engine.destroy()</code></pre>
+
+      <p>Run it:</p>
+      <pre><code class="language-bash">python3 my_test.py</code></pre>
+
+      <h2 id="cli-quick">CLI Quick Start</h2>
+
+      <p>LoadSpiker also ships with a command-line interface for quick, scriptable tests.</p>
+
+      <pre><code class="language-bash"># Quick test of a single URL
+loadspiker https://httpbin.org/get --users 10 --duration 30
+
+# With ramp-up period
+loadspiker https://httpbin.org/get --users 50 --duration 60 --ramp-up 15
+
+# Interactive mode (REPL)
+loadspiker --interactive
+
+# Generate an HTML report
+loadspiker https://httpbin.org/get --users 20 --duration 30 --html report.html</code></pre>
+
+      <h2 id="configuration">Configuration Files</h2>
+
+      <p>For repeatable tests, store configuration in JSON and scenario logic in Python.</p>
+
+      <h3>JSON Config (<code>config.json</code>)</h3>
+      <pre><code class="language-json">{
+  "engine": {
+    "max_connections": 200,
+    "worker_threads": 8,
+    "timeout_ms": 30000
+  },
+  "load": {
+    "users": 50,
+    "duration": 120,
+    "ramp_up": 20
+  },
+  "reporting": {
+    "console": true,
+    "json": "results.json",
+    "html": "report.html"
+  }
+}</code></pre>
+
+      <h3>Python Scenario File (<code>scenario.py</code>)</h3>
+      <pre><code class="language-python">from loadspiker import Scenario
+
+scenario = Scenario("API Smoke Test")
+
+scenario.get(
+    "https://api.example.com/health",
+    headers={"Accept": "application/json"}
+)
+
+scenario.post(
+    "https://api.example.com/users",
+    body='{"name": "Test User", "email": "test@example.com"}',
+    headers={"Content-Type": "application/json", "Authorization": "Bearer token123"}
+)</code></pre>
+
+      <p>Run using both files:</p>
+      <pre><code class="language-bash">loadspiker --scenario scenario.py --config config.json</code></pre>
+
+      <h2 id="build-targets">Build Targets</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Target</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>make install-deps</code></td><td>Install system dependencies for your platform</td></tr>
+          <tr><td><code>make build</code></td><td>Compile the C engine and build the Python extension</td></tr>
+          <tr><td><code>make install</code></td><td>Install the Python package (calls pip install -e .)</td></tr>
+          <tr><td><code>make test</code></td><td>Run the full test suite</td></tr>
+          <tr><td><code>make debug</code></td><td>Build with debug symbols and verbose logging</td></tr>
+          <tr><td><code>make clean</code></td><td>Remove all build artifacts</td></tr>
+          <tr><td><code>make dev-setup</code></td><td>Full developer setup: deps + build + install + test</td></tr>
+          <tr><td><code>make package</code></td><td>Create a distributable package archive</td></tr>
+          <tr><td><code>make benchmark</code></td><td>Run the built-in performance benchmarks</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#requirements">Requirements</a>
+      <a href="#req-ubuntu" class="toc-sub">Ubuntu / Debian</a>
+      <a href="#req-centos" class="toc-sub">CentOS / RHEL</a>
+      <a href="#req-macos" class="toc-sub">macOS</a>
+      <a href="#req-windows" class="toc-sub">Windows</a>
+      <a href="#installation">Installation</a>
+      <a href="#first-test">Your First Test</a>
+      <a href="#cli-quick">CLI Quick Start</a>
+      <a href="#configuration">Configuration Files</a>
+      <a href="#build-targets">Build Targets</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

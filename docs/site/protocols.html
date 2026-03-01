@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocols — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html" class="active"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Protocols</h1>
+      <p class="page-lead">LoadSpiker supports multiple network protocols through a unified API backed by the C engine.</p>
+
+      <div class="protocol-grid">
+        <div class="protocol-card">
+          <div class="protocol-icon">🌐</div>
+          <div class="protocol-name">HTTP / HTTPS</div>
+          <div class="protocol-status status-real">Real</div>
+        </div>
+        <div class="protocol-card">
+          <div class="protocol-icon">🔄</div>
+          <div class="protocol-name">WebSocket</div>
+          <div class="protocol-status status-simulated">Simulated</div>
+        </div>
+        <div class="protocol-card">
+          <div class="protocol-icon">🔗</div>
+          <div class="protocol-name">TCP</div>
+          <div class="protocol-status status-real">Real</div>
+        </div>
+        <div class="protocol-card">
+          <div class="protocol-icon">📡</div>
+          <div class="protocol-name">UDP</div>
+          <div class="protocol-status status-real">Real</div>
+        </div>
+        <div class="protocol-card">
+          <div class="protocol-icon">📨</div>
+          <div class="protocol-name">MQTT</div>
+          <div class="protocol-status status-real">Real</div>
+        </div>
+        <div class="protocol-card">
+          <div class="protocol-icon">🗄️</div>
+          <div class="protocol-name">Database</div>
+          <div class="protocol-status status-simulated">Simulated</div>
+        </div>
+      </div>
+
+      <!-- ===================== HTTP ===================== -->
+      <h2 id="http">HTTP / HTTPS</h2>
+      <p>HTTP and HTTPS are fully implemented via <strong>libcurl</strong>. All HTTP methods are supported with full header and body control.</p>
+
+      <pre><code class="language-python">from loadspiker import Engine, Scenario
+
+engine = Engine(max_connections=200, worker_threads=8)
+
+# GET request
+response = engine.execute_request("https://api.example.com/users")
+print(response['status_code'])      # 200
+print(response['body'])             # JSON string
+print(response['response_time_ms']) # 42.1
+
+# POST with JSON body
+response = engine.execute_request(
+    "https://api.example.com/users",
+    method="POST",
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer my-token"
+    },
+    body='{"name": "Alice", "email": "alice@example.com"}'
+)
+
+# PUT, DELETE
+response = engine.execute_request("https://api.example.com/users/1",
+                                   method="PUT",
+                                   body='{"name": "Alice Updated"}')
+response = engine.execute_request("https://api.example.com/users/1",
+                                   method="DELETE")</code></pre>
+
+      <h3>Response Dictionary Keys</h3>
+      <table>
+        <thead><tr><th>Key</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>status_code</code></td><td>int</td><td>HTTP status code (200, 404, 500, etc.)</td></tr>
+          <tr><td><code>body</code></td><td>str</td><td>Response body as a string</td></tr>
+          <tr><td><code>headers</code></td><td>dict</td><td>Response headers as key-value pairs</td></tr>
+          <tr><td><code>response_time_ms</code></td><td>float</td><td>Total response time in milliseconds</td></tr>
+          <tr><td><code>error</code></td><td>str or None</td><td>Error message if the request failed, else None</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Scenario-Based HTTP Testing</h3>
+      <pre><code class="language-python">scenario = Scenario("HTTP API Test", base_url="https://api.example.com")
+scenario.get("/users", headers={"Accept": "application/json"})
+scenario.post("/users",
+              body='{"name": "Bob"}',
+              headers={"Content-Type": "application/json"})
+scenario.get("/users/1")
+scenario.delete("/users/1")
+
+results = engine.run_scenario(scenario, users=50, duration=60)</code></pre>
+
+      <!-- ===================== WEBSOCKET ===================== -->
+      <h2 id="websocket">WebSocket</h2>
+
+      <div class="callout warn">
+        <strong>Phase 1 Simulation:</strong> WebSocket in the current release measures connection overhead and timing without requiring <code>libwebsockets</code>. Real message exchange over a live WS server will be available in Phase 2. The API surface is identical to the planned final API, so your test code will not need to change.
+      </div>
+
+      <pre><code class="language-python">from loadspiker import Engine
+
+engine = Engine(max_connections=50, worker_threads=4)
+
+# Connect
+ws_id = engine.websocket_connect(
+    "wss://echo.example.com/ws",
+    headers={"Authorization": "Bearer token123"}
+)
+
+# Send a message
+engine.websocket_send(ws_id, '{"type": "subscribe", "channel": "prices"}')
+
+# Send more messages
+engine.websocket_send(ws_id, '{"type": "ping"}')
+
+# Close
+engine.websocket_close(ws_id)</code></pre>
+
+      <h3>WebSocket in a Scenario</h3>
+      <pre><code class="language-python">from loadspiker.scenarios import WebSocketScenario
+
+ws_scenario = WebSocketScenario("Chat Load Test",
+                                 broker_url="wss://chat.example.com/ws")
+ws_scenario.connect()
+ws_scenario.send('{"type": "join", "room": "general"}')
+ws_scenario.send('{"type": "message", "text": "Hello!"}')
+ws_scenario.think_time(1.0)
+ws_scenario.disconnect()
+
+results = engine.run_scenario(ws_scenario, users=100, duration=60)</code></pre>
+
+      <!-- ===================== TCP ===================== -->
+      <h2 id="tcp">TCP</h2>
+
+      <div class="callout info">
+        <strong>C Extension Required:</strong> TCP uses socket-based bindings in <code>tcp.c</code>. If these bindings are not yet exposed in the Python extension, calls will raise <code>AttributeError</code>. Check availability with the helper below before using in tests.
+      </div>
+
+      <pre><code class="language-python">from loadspiker import Engine
+
+engine = Engine()
+
+# Check availability
+if hasattr(engine, 'tcp_connect'):
+    # Connect to a raw TCP server
+    tcp_id = engine.tcp_connect("tcp.example.com", 9000, timeout_ms=5000)
+
+    # Send data (string or bytes)
+    engine.tcp_send(tcp_id, "HELLO\r\n")
+
+    # Receive response
+    data = engine.tcp_receive(tcp_id, buffer_size=1024)
+    print(data)
+
+    # Disconnect
+    engine.tcp_disconnect(tcp_id)
+else:
+    print("TCP bindings not available in this build")</code></pre>
+
+      <h3>TCP Scenario</h3>
+      <pre><code class="language-python">from loadspiker.scenarios import TCPScenario
+
+tcp_scenario = TCPScenario("TCP Echo Test",
+                            host="echo.example.com",
+                            port=9000)
+tcp_scenario.connect()
+tcp_scenario.send("PING\r\n")
+tcp_scenario.receive(buffer_size=64)
+tcp_scenario.disconnect()
+
+results = engine.run_scenario(tcp_scenario, users=20, duration=30)</code></pre>
+
+      <!-- ===================== UDP ===================== -->
+      <h2 id="udp">UDP</h2>
+
+      <pre><code class="language-python">from loadspiker import Engine
+
+engine = Engine()
+
+# Create a UDP endpoint (port 0 = OS-assigned)
+ep_id = engine.udp_create_endpoint(local_port=0)
+
+# Send a datagram
+engine.udp_send(ep_id, "metrics.example.com", 8125, "page.load:1|c")
+
+# Receive a response (with 500ms timeout)
+response = engine.udp_receive(ep_id, buffer_size=512, timeout_ms=500)
+if response:
+    print(f"From {response['source_host']}:{response['source_port']}")
+    print(f"Data: {response['data']}")
+
+# Close the endpoint
+engine.udp_close_endpoint(ep_id)</code></pre>
+
+      <h3>StatsD-Style Load Test</h3>
+      <pre><code class="language-python">from loadspiker import Engine, Scenario
+
+engine = Engine()
+ep_id = engine.udp_create_endpoint()
+
+scenario = Scenario("StatsD Metrics Flood")
+# Custom request logic using UDP
+for i in range(10):
+    engine.udp_send(ep_id, "statsd.example.com", 8125,
+                    f"request.count:1|c|#env:load-test")
+
+results = engine.run_scenario(scenario, users=50, duration=30)
+engine.udp_close_endpoint(ep_id)</code></pre>
+
+      <!-- ===================== MQTT ===================== -->
+      <h2 id="mqtt">MQTT</h2>
+      <p>MQTT is implemented via a real CONNECT/PUBLISH/SUBSCRIBE/DISCONNECT packet flow in <code>mqtt.c</code>. Use it to load test IoT brokers such as Mosquitto, EMQX, and HiveMQ.</p>
+
+      <h3>MQTTScenario (Recommended)</h3>
+      <pre><code class="language-python">from loadspiker.scenarios import MQTTScenario
+
+# Basic publish scenario
+mqtt_scenario = MQTTScenario(
+    "IoT Temperature Publish",
+    broker_host="mqtt.example.com",
+    broker_port=1883
+)
+mqtt_scenario.connect(
+    client_id="sensor-{user_id}",
+    username="iot_user",
+    password="secret"
+)
+mqtt_scenario.publish("sensors/{user_id}/temperature", payload="22.5", qos=0)
+mqtt_scenario.publish("sensors/{user_id}/humidity",    payload="65",   qos=1)
+mqtt_scenario.disconnect()
+
+results = engine.run_scenario(mqtt_scenario, users=100, duration=60)</code></pre>
+
+      <pre><code class="language-python"># Burst publish scenario
+burst_scenario = MQTTScenario("MQTT Burst", broker_host="mqtt.example.com")
+burst_scenario.connect(client_id="burst-{user_id}")
+for i in range(20):
+    burst_scenario.publish(f"test/topic/{i}", payload=f"message-{i}", qos=0)
+burst_scenario.disconnect()</code></pre>
+
+      <pre><code class="language-python"># Topic pattern scenario
+pattern_scenario = MQTTScenario("MQTT Topic Pattern", broker_host="mqtt.example.com")
+pattern_scenario.connect(client_id="pattern-{user_id}")
+pattern_scenario.subscribe("alerts/#", qos=1)
+pattern_scenario.publish("sensors/data", payload='{"temp":25}', qos=0)
+pattern_scenario.disconnect()</code></pre>
+
+      <h3>Direct MQTT API</h3>
+      <pre><code class="language-python">from loadspiker import Engine
+
+engine = Engine()
+
+mqtt_id = engine.mqtt_connect(
+    broker_host="mqtt.example.com",
+    broker_port=1883,
+    client_id="loadspiker-test",
+    username="user",
+    password="pass",
+    keepalive=60
+)
+
+engine.mqtt_publish(mqtt_id, "test/load", '{"value": 42}', qos=0)
+engine.mqtt_publish(mqtt_id, "test/load", '{"value": 43}', qos=1, retain=True)
+engine.mqtt_subscribe(mqtt_id, "test/responses/#", qos=0)
+
+engine.mqtt_disconnect(mqtt_id)</code></pre>
+
+      <h3>QoS Levels</h3>
+      <table>
+        <thead><tr><th>QoS</th><th>Name</th><th>Delivery Guarantee</th><th>Use Case</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>0</code></td>
+            <td>At most once</td>
+            <td>Fire and forget — no acknowledgement</td>
+            <td>High-frequency sensor data where some loss is acceptable</td>
+          </tr>
+          <tr>
+            <td><code>1</code></td>
+            <td>At least once</td>
+            <td>Acknowledged delivery — may duplicate</td>
+            <td>Most IoT use cases, general telemetry</td>
+          </tr>
+          <tr>
+            <td><code>2</code></td>
+            <td>Exactly once</td>
+            <td>Four-way handshake — no duplicates, no loss</td>
+            <td>Critical commands, financial events</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ===================== DATABASE ===================== -->
+      <h2 id="database">Database</h2>
+
+      <div class="callout warn">
+        <strong>Simulation Notice:</strong> Database support in Phase 1 simulates connection pool overhead and query timing without real database drivers. This measures your application's connection handling and pool exhaustion behavior under load. Real driver integration (MySQL, PostgreSQL, MongoDB) is planned for Phase 2.
+      </div>
+
+      <h3>Connection Strings</h3>
+      <table>
+        <thead><tr><th>Database</th><th>Format</th></tr></thead>
+        <tbody>
+          <tr><td>MySQL</td><td><code>mysql://user:pass@host:3306/dbname</code></td></tr>
+          <tr><td>PostgreSQL</td><td><code>postgresql://user:pass@host:5432/dbname</code></td></tr>
+          <tr><td>MongoDB</td><td><code>mongodb://user:pass@host:27017/dbname</code></td></tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-python">from loadspiker import Engine
+
+engine = Engine()
+
+# MySQL connection pool
+mysql_id = engine.database_connect(
+    "mysql://app_user:password@db.example.com:3306/production",
+    pool_size=20
+)
+
+# Execute queries
+result = engine.database_query(mysql_id, "SELECT COUNT(*) FROM users")
+print(result['status_code'])     # 200 = success
+print(result['response_time_ms']) # simulated query latency
+
+result = engine.database_query(
+    mysql_id,
+    "SELECT id, name FROM products WHERE category = ?",
+    params=["electronics"]
+)
+
+engine.database_disconnect(mysql_id)
+
+# PostgreSQL
+pg_id = engine.database_connect(
+    "postgresql://user:pass@pg.example.com:5432/analytics",
+    pool_size=10
+)
+engine.database_query(pg_id, "SELECT * FROM events LIMIT 100")
+engine.database_disconnect(pg_id)
+
+# MongoDB
+mongo_id = engine.database_connect(
+    "mongodb://user:pass@mongo.example.com:27017/logs",
+    pool_size=5
+)
+engine.database_query(mongo_id, '{"collection": "events", "find": {}}')
+engine.database_disconnect(mongo_id)</code></pre>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#http">HTTP / HTTPS</a>
+      <a href="#websocket">WebSocket</a>
+      <a href="#tcp">TCP</a>
+      <a href="#udp">UDP</a>
+      <a href="#mqtt">MQTT</a>
+      <a href="#database">Database</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Troubleshooting — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html" class="active"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Troubleshooting</h1>
+      <p class="page-lead">Solutions to common problems encountered when installing, building, or running LoadSpiker.</p>
+
+      <!-- ===================== SEGFAULT ===================== -->
+      <h2 id="segfault">Segmentation Fault on Startup</h2>
+
+      <h3>Symptoms</h3>
+      <ul>
+        <li>Python crashes immediately with <code>Segmentation fault (core dumped)</code></li>
+        <li>Crash occurs when importing <code>loadspiker</code> or creating an <code>Engine()</code> instance</li>
+        <li>Stack trace shows a crash inside <code>_loadspiker.so</code></li>
+      </ul>
+
+      <h3>Likely Causes</h3>
+      <ul>
+        <li>Mismatched Python versions between build time and runtime</li>
+        <li>Stale <code>.so</code> file from an older build — rebuild required</li>
+        <li>Incompatible libcurl version (API mismatch)</li>
+        <li>Memory corruption in the C engine (use ASan to diagnose)</li>
+      </ul>
+
+      <h3>Solutions</h3>
+
+      <p>Build with debug symbols and run under GDB:</p>
+      <pre><code class="language-bash">make debug
+gdb python3
+(gdb) run -c "import loadspiker; e = loadspiker.Engine()"
+(gdb) bt  # print backtrace</code></pre>
+
+      <p>Build with AddressSanitizer (Linux):</p>
+      <pre><code class="language-bash">CFLAGS="-fsanitize=address -g" LDFLAGS="-fsanitize=address" make build
+python3 -c "import loadspiker; loadspiker.Engine()"</code></pre>
+
+      <p>Build with AddressSanitizer (macOS):</p>
+      <pre><code class="language-bash">CFLAGS="-fsanitize=address -g" \
+LDFLAGS="-fsanitize=address" \
+ASAN_OPTIONS=detect_leaks=1 make build
+python3 -c "import loadspiker; loadspiker.Engine()"</code></pre>
+
+      <p>Use Valgrind (Linux only):</p>
+      <pre><code class="language-bash">valgrind --leak-check=full --error-exitcode=1 \
+  python3 -c "
+from loadspiker import Engine
+e = Engine(max_connections=5, worker_threads=1)
+e.destroy()
+"</code></pre>
+
+      <p>Clean rebuild to eliminate stale artifacts:</p>
+      <pre><code class="language-bash">make clean
+make build
+make install</code></pre>
+
+      <!-- ===================== IMPORT ERROR ===================== -->
+      <h2 id="import-error">ImportError: No module named 'loadspiker'</h2>
+
+      <h3>Solutions</h3>
+
+      <p>Add the project root to <code>PYTHONPATH</code>:</p>
+      <pre><code class="language-bash">export PYTHONPATH=/path/to/loadspiker:$PYTHONPATH
+python3 -c "import loadspiker"</code></pre>
+
+      <p>If using a virtual environment, ensure it is activated:</p>
+      <pre><code class="language-bash">source venv/bin/activate
+python3 -c "import loadspiker"</code></pre>
+
+      <p>Verify the compiled shared library exists:</p>
+      <pre><code class="language-bash">ls -la loadspiker/_loadspiker*.so
+# If missing, rebuild:
+make clean && make build</code></pre>
+
+      <p>Install in editable mode (recommended for development):</p>
+      <pre><code class="language-bash">pip install -e .
+python3 -c "import loadspiker; print(loadspiker.__version__)"</code></pre>
+
+      <!-- ===================== BUILD FAILURE ===================== -->
+      <h2 id="build-failure">Build Failures</h2>
+
+      <h3>Missing libcurl</h3>
+      <pre><code class="language-bash">error: curl/curl.h: No such file or directory</code></pre>
+      <pre><code class="language-bash"># Ubuntu / Debian
+sudo apt-get install -y libcurl4-openssl-dev
+
+# CentOS / RHEL
+sudo yum install -y libcurl-devel
+
+# macOS
+brew install curl
+# Then tell pkg-config where to find it:
+export PKG_CONFIG_PATH="$(brew --prefix curl)/lib/pkgconfig"</code></pre>
+
+      <h3>Missing Python Headers</h3>
+      <pre><code class="language-bash">error: Python.h: No such file or directory</code></pre>
+      <pre><code class="language-bash"># Ubuntu / Debian
+sudo apt-get install -y python3-dev
+
+# CentOS / RHEL
+sudo yum install -y python3-devel
+
+# Verify the correct version
+python3-config --includes</code></pre>
+
+      <h3>Missing pkg-config</h3>
+      <pre><code class="language-bash">make: pkg-config: No such file or directory</code></pre>
+      <pre><code class="language-bash"># Ubuntu / Debian
+sudo apt-get install -y pkg-config
+
+# macOS
+brew install pkg-config</code></pre>
+
+      <!-- ===================== HIGH MEMORY ===================== -->
+      <h2 id="high-memory">High Memory Usage</h2>
+
+      <p>If LoadSpiker consumes excessive memory during large-scale tests, try these mitigations:</p>
+      <ul>
+        <li><strong>Reduce <code>max_connections</code>:</strong> Each connection handle has a fixed buffer overhead. Halving <code>max_connections</code> roughly halves connection-pool memory.
+          <pre><code class="language-python">engine = Engine(max_connections=50, worker_threads=4)</code></pre>
+        </li>
+        <li><strong>Reduce <code>worker_threads</code>:</strong> Each thread has a stack (typically 8 MB on Linux). Use fewer threads if memory is constrained.
+          <pre><code class="language-python">engine = Engine(max_connections=100, worker_threads=2)</code></pre>
+        </li>
+        <li><strong>Avoid storing large response bodies:</strong> If you do not need the response body for assertions, do not log or accumulate it between requests.</li>
+        <li><strong>Throttle request rate:</strong> Add a <code>think_time</code> in scenarios to reduce concurrent in-flight requests and the associated buffer allocations.</li>
+      </ul>
+
+      <!-- ===================== LOW PERFORMANCE ===================== -->
+      <h2 id="performance">Low Performance / Low RPS</h2>
+
+      <h3>OS-Level Limits</h3>
+      <pre><code class="language-bash"># Check current file descriptor and process limits
+ulimit -n    # open files (should be >= max_connections * 2)
+ulimit -u    # processes
+
+# Increase for the current session
+ulimit -n 65536
+
+# Permanent increase (add to /etc/security/limits.conf):
+# * soft nofile 65536
+# * hard nofile 65536</code></pre>
+
+      <pre><code class="language-bash"># Linux: check kernel TCP parameters
+cat /proc/sys/net/ipv4/ip_local_port_range
+# Should be a wide range, e.g. 1024 60999
+# Expand if needed:
+sudo sysctl -w net.ipv4.ip_local_port_range="1024 60999"
+sudo sysctl -w net.ipv4.tcp_tw_reuse=1</code></pre>
+
+      <h3>Python-Level Profiling</h3>
+      <pre><code class="language-bash"># Profile your scenario script
+python3 -m cProfile -s cumulative my_test.py | head -30</code></pre>
+
+      <h3>System Monitoring During Tests</h3>
+      <pre><code class="language-bash"># CPU and memory
+top -p $(pgrep -f loadspiker)
+
+# I/O wait
+iostat -x 1
+
+# Active connections
+netstat -an | grep ESTABLISHED | wc -l
+ss -s</code></pre>
+
+      <!-- ===================== THREAD SAFETY ===================== -->
+      <h2 id="thread-safety">Thread Safety Issues</h2>
+
+      <h3>Symptoms</h3>
+      <ul>
+        <li>Intermittent crashes or corrupted results when running tests concurrently</li>
+        <li>Sporadic <code>double free</code> or <code>use-after-free</code> errors detected by ASan</li>
+        <li>Metrics show wildly inconsistent values between runs</li>
+      </ul>
+
+      <h3>Solutions</h3>
+      <ul>
+        <li>
+          <strong>Use one <code>Engine</code> instance per test run:</strong> The engine is designed to be used from a single controlling thread. Do not call <code>run_scenario</code> from multiple Python threads simultaneously on the same engine.
+          <pre><code class="language-python"># WRONG: concurrent access from multiple threads
+import threading
+engine = Engine()
+threads = [threading.Thread(target=engine.run_scenario, args=(s,)) for s in scenarios]
+
+# CORRECT: separate engine per thread
+def run_in_thread(scenario):
+    eng = Engine(max_connections=50)
+    eng.run_scenario(scenario, users=10, duration=30)
+    eng.destroy()
+
+threads = [threading.Thread(target=run_in_thread, args=(s,)) for s in scenarios]</code></pre>
+        </li>
+        <li><strong>Do not share <code>SessionStore</code> objects:</strong> Each virtual user must have its own session store. See <a href="sessions-auth.html#multi-user">Multi-User Session Isolation</a>.</li>
+      </ul>
+
+      <!-- ===================== PROTOCOL ERRORS ===================== -->
+      <h2 id="protocol-errors">Protocol-Specific Errors</h2>
+
+      <h3>AttributeError for TCP / UDP / MQTT / Database</h3>
+      <pre><code class="language-bash">AttributeError: '_loadspiker.LoadSpikerEngine' object has no attribute 'tcp_connect'</code></pre>
+
+      <p>This error means the C extension does not yet expose Python bindings for the requested protocol. The C implementation files (<code>tcp.c</code>, <code>udp.c</code>, <code>mqtt.c</code>, <code>database.c</code>) exist and compile correctly, but the <code>PyMethodDef</code> entries have not yet been added to <code>python_extension.c</code>.</p>
+
+      <div class="callout warn">
+        <strong>Test suite skip markers:</strong> Tests for these protocols are decorated with <code>@pytest.mark.skipif</code> so the test suite passes even when the bindings are absent. This is intentional and expected behavior, not a test failure. See <a href="architecture.html#python-extension">Architecture: Python C Extension</a> for the full list of exposed methods.
+      </div>
+
+      <p>Check availability at runtime:</p>
+      <pre><code class="language-python">from loadspiker import Engine
+
+engine = Engine()
+protocols_available = {
+    'tcp':      hasattr(engine, 'tcp_connect'),
+    'udp':      hasattr(engine, 'udp_create_endpoint'),
+    'mqtt':     hasattr(engine, 'mqtt_connect'),
+    'database': hasattr(engine, 'database_connect'),
+}
+print(protocols_available)
+# {'tcp': False, 'udp': False, 'mqtt': False, 'database': False}
+# HTTP and WebSocket are always available</code></pre>
+
+      <!-- ===================== DEBUG MODE ===================== -->
+      <h2 id="debug-mode">Debug Mode</h2>
+
+      <h3>Python Logging</h3>
+      <pre><code class="language-python">import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s'
+)
+
+from loadspiker import Engine, Scenario
+
+engine = Engine(verbose=True)  # Enable C-level verbose output
+scenario = Scenario("Debug Test")
+scenario.get("https://httpbin.org/get")
+results = engine.run_scenario(scenario, users=2, duration=10)</code></pre>
+
+      <h3>C Engine Debug Build</h3>
+      <pre><code class="language-bash"># Build with LOADSPIKER_DEBUG=1 for extra C-level logging
+LOADSPIKER_DEBUG=1 make build
+
+# Or set at runtime (if debug logging is compiled in)
+LOADSPIKER_DEBUG=1 python3 my_test.py
+
+# Verbose C output
+LOADSPIKER_VERBOSE=1 python3 my_test.py</code></pre>
+
+      <h3>Memory Testing with ASan</h3>
+      <pre><code class="language-bash"># Run tests with AddressSanitizer
+make test-asan
+
+# Run a specific test with ASan
+CFLAGS="-fsanitize=address -g" make build
+python3 -m pytest tests/test_engine.py -v</code></pre>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#segfault">Segmentation Fault</a>
+      <a href="#import-error">ImportError</a>
+      <a href="#build-failure">Build Failures</a>
+      <a href="#high-memory">High Memory Usage</a>
+      <a href="#performance">Low Performance</a>
+      <a href="#thread-safety">Thread Safety Issues</a>
+      <a href="#protocol-errors">Protocol-Specific Errors</a>
+      <a href="#debug-mode">Debug Mode</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

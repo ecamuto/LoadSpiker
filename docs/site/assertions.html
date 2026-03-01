@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assertions — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html" class="active"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Assertions</h1>
+      <p class="page-lead">Validate individual responses and aggregate performance metrics with LoadSpiker's assertion system.</p>
+
+      <h2 id="overview">Overview</h2>
+      <p>LoadSpiker provides two categories of assertions:</p>
+      <ul>
+        <li><strong>Response Assertions</strong> (<code>loadspiker.assertions</code>) — Validate individual HTTP responses: status codes, body content, headers, JSON values.</li>
+        <li><strong>Performance Assertions</strong> (<code>loadspiker.performance_assertions</code>) — Validate aggregate test results: throughput, error rate, response time percentiles.</li>
+      </ul>
+
+      <pre><code class="language-python">from loadspiker import Engine, Scenario
+from loadspiker.assertions import status_is, body_contains, json_path, run_assertions
+from loadspiker.performance_assertions import (
+    throughput_at_least, error_rate_below, run_performance_assertions
+)
+
+engine = Engine()
+scenario = Scenario("Assertion Demo")
+scenario.get("https://httpbin.org/get")
+
+# Run the load test
+results = engine.run_scenario(scenario, users=10, duration=30)
+
+# Check response (using a single recorded response)
+response = engine.execute_request("https://httpbin.org/get")
+passed, failures = run_assertions(response, [
+    status_is(200),
+    body_contains('"url"'),
+    json_path("url", expected_value="https://httpbin.org/get"),
+])
+
+# Check aggregate performance
+perf_passed, perf_failures = run_performance_assertions(results, [
+    throughput_at_least(5.0),
+    error_rate_below(0.01),
+])
+</code></pre>
+
+      <!-- ===================== RESPONSE ASSERTIONS ===================== -->
+      <h2 id="response-assertions">Response Assertions</h2>
+      <p>Import all response assertions from <code>loadspiker.assertions</code>.</p>
+
+      <h3 id="status-is">status_is</h3>
+      <div class="method-sig"><code>status_is(expected_status)</code></div>
+      <p>Assert that the response HTTP status code equals the expected value.</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>expected_status</code></td><td>int</td><td>Expected HTTP status code (e.g. 200, 201, 404)</td></tr>
+        </tbody>
+      </table>
+      <pre><code class="language-python">from loadspiker.assertions import status_is
+
+assertion = status_is(200)
+passed, message = assertion(response)
+# passed = True if response['status_code'] == 200</code></pre>
+
+      <h3 id="response-time-under">response_time_under</h3>
+      <div class="method-sig"><code>response_time_under(max_ms)</code></div>
+      <p>Assert that the response time is below the given threshold.</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>max_ms</code></td><td>float</td><td>Maximum acceptable response time in milliseconds</td></tr>
+        </tbody>
+      </table>
+      <pre><code class="language-python">from loadspiker.assertions import response_time_under
+
+assertion = response_time_under(500)  # must respond in under 500ms
+passed, message = assertion(response)</code></pre>
+
+      <h3 id="body-contains">body_contains</h3>
+      <div class="method-sig"><code>body_contains(substring, case_sensitive=True)</code></div>
+      <p>Assert that the response body contains the given substring.</p>
+      <pre><code class="language-python">from loadspiker.assertions import body_contains
+
+assertion = body_contains('"status": "ok"')
+passed, message = assertion(response)</code></pre>
+
+      <h3 id="body-matches">body_matches</h3>
+      <div class="method-sig"><code>body_matches(pattern, flags=0)</code></div>
+      <p>Assert that the response body matches a regular expression pattern.</p>
+      <pre><code class="language-python">from loadspiker.assertions import body_matches
+import re
+
+assertion = body_matches(r'"id":\s*\d+')
+passed, message = assertion(response)
+
+# Case-insensitive
+assertion2 = body_matches(r'success', flags=re.IGNORECASE)
+passed2, _ = assertion2(response)</code></pre>
+
+      <h3 id="json-path">json_path</h3>
+      <div class="method-sig"><code>json_path(path, expected_value=None, exists=True)</code></div>
+      <p>Assert a value at a dot-notation JSON path in the response body.</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>path</code></td><td>str</td><td>Dot-notation path (e.g. <code>"data.user.id"</code>)</td></tr>
+          <tr><td><code>expected_value</code></td><td>any</td><td>Expected value at the path. If None, only existence is checked.</td></tr>
+          <tr><td><code>exists</code></td><td>bool</td><td>Set to False to assert the path does NOT exist.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <strong>Path Syntax:</strong> Use dot notation to navigate nested objects (<code>"user.address.city"</code>) and bracket notation for arrays (<code>"items[0].name"</code>). The root of the parsed JSON is the starting point.
+      </div>
+
+      <pre><code class="language-python">from loadspiker.assertions import json_path
+
+# Check specific value
+assertion = json_path("data.status", expected_value="active")
+passed, message = assertion(response)
+
+# Check existence only (don't care about the value)
+assertion2 = json_path("data.user.id", exists=True)
+
+# Check that a key does NOT exist
+assertion3 = json_path("data.error", exists=False)
+
+# Array indexing
+assertion4 = json_path("results[0].name", expected_value="Alice")</code></pre>
+
+      <h3 id="header-exists">header_exists</h3>
+      <div class="method-sig"><code>header_exists(header_name, expected_value=None)</code></div>
+      <p>Assert that the response contains a header, optionally with a specific value.</p>
+      <pre><code class="language-python">from loadspiker.assertions import header_exists
+
+# Check existence
+assertion = header_exists("Content-Type")
+passed, _ = assertion(response)
+
+# Check value (case-insensitive value match)
+assertion2 = header_exists("Content-Type", "application/json")
+passed2, _ = assertion2(response)</code></pre>
+
+      <h3 id="custom-assertion">custom_assertion</h3>
+      <div class="method-sig"><code>custom_assertion(fn, description=None)</code></div>
+      <p>Create an assertion from any callable that receives the response dict and returns a boolean.</p>
+      <pre><code class="language-python">from loadspiker.assertions import custom_assertion
+import json
+
+# Lambda assertion
+assert_large_body = custom_assertion(
+    lambda r: len(r['body']) > 100,
+    description="Body must be over 100 bytes"
+)
+
+# Full function for complex logic
+def has_valid_user(response):
+    try:
+        data = json.loads(response['body'])
+        return (
+            isinstance(data.get('id'), int) and
+            isinstance(data.get('email'), str) and
+            '@' in data['email']
+        )
+    except Exception:
+        return False
+
+assert_valid_user = custom_assertion(has_valid_user, "Response must contain a valid user object")
+passed, message = assert_valid_user(response)</code></pre>
+
+      <h3 id="assertion-groups">AssertionGroup</h3>
+      <p>Combine multiple assertions with explicit AND or OR logic.</p>
+      <pre><code class="language-python">from loadspiker.assertions import AssertionGroup, status_is, body_contains, response_time_under
+
+# AND logic — all must pass
+all_pass = AssertionGroup([
+    status_is(200),
+    body_contains('"success"'),
+    response_time_under(1000),
+], logic="AND")
+
+# OR logic — at least one must pass
+any_pass = AssertionGroup([
+    status_is(200),
+    status_is(201),  # Accept both 200 and 201
+], logic="OR")
+
+passed, failures = all_pass.evaluate(response)</code></pre>
+
+      <h3 id="run-assertions">run_assertions</h3>
+      <div class="method-sig"><code>run_assertions(response, assertions, fail_fast=False)</code></div>
+      <p>Evaluate a list of assertions against a response and return a summary.</p>
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.assertions import (
+    status_is, body_contains, json_path,
+    header_exists, response_time_under, run_assertions
+)
+
+engine = Engine()
+response = engine.execute_request("https://api.example.com/users/1")
+
+passed, failures = run_assertions(response, [
+    status_is(200),
+    response_time_under(500),
+    header_exists("Content-Type", "application/json"),
+    json_path("id", exists=True),
+    json_path("name", expected_value="Alice"),
+    body_contains('"active": true'),
+])
+
+if passed:
+    print("All assertions passed!")
+else:
+    for failure in failures:
+        print(f"FAIL: {failure}")</code></pre>
+
+      <!-- ===================== PERFORMANCE ASSERTIONS ===================== -->
+      <h2 id="performance-assertions">Performance Assertions</h2>
+      <p>Import performance assertions from <code>loadspiker.performance_assertions</code>. These operate on the dict returned by <code>engine.run_scenario()</code> or <code>engine.get_metrics()</code>.</p>
+
+      <h3 id="throughput-at-least">throughput_at_least</h3>
+      <div class="method-sig"><code>throughput_at_least(min_rps)</code></div>
+      <p>Assert that the test achieved at least <code>min_rps</code> requests per second.</p>
+      <pre><code class="language-python">from loadspiker.performance_assertions import throughput_at_least
+
+assertion = throughput_at_least(100.0)  # require 100+ RPS
+passed, message = assertion(results)</code></pre>
+
+      <h3 id="avg-response-time">avg_response_time_under</h3>
+      <div class="method-sig"><code>avg_response_time_under(max_ms)</code></div>
+      <p>Assert that the average response time is below the threshold.</p>
+      <pre><code class="language-python">from loadspiker.performance_assertions import avg_response_time_under
+
+assertion = avg_response_time_under(200)  # average must be under 200ms
+passed, message = assertion(results)</code></pre>
+
+      <h3 id="error-rate-below">error_rate_below</h3>
+      <div class="method-sig"><code>error_rate_below(max_rate)</code></div>
+      <p>Assert that the error rate (fraction of failed requests) is below the threshold. Value is a fraction between 0.0 and 1.0.</p>
+      <pre><code class="language-python">from loadspiker.performance_assertions import error_rate_below
+
+assertion = error_rate_below(0.01)  # less than 1% errors
+passed, message = assertion(results)</code></pre>
+
+      <h3 id="success-rate">success_rate_at_least</h3>
+      <div class="method-sig"><code>success_rate_at_least(min_rate)</code></div>
+      <p>Assert that the success rate (fraction of successful requests) meets the minimum.</p>
+      <pre><code class="language-python">from loadspiker.performance_assertions import success_rate_at_least
+
+assertion = success_rate_at_least(0.99)  # at least 99% success
+passed, message = assertion(results)</code></pre>
+
+      <h3 id="max-response-time">max_response_time_under</h3>
+      <div class="method-sig"><code>max_response_time_under(max_ms)</code></div>
+      <p>Assert that no single request exceeded the given response time. Useful for catching outliers.</p>
+      <pre><code class="language-python">from loadspiker.performance_assertions import max_response_time_under
+
+assertion = max_response_time_under(5000)  # no request took over 5 seconds
+passed, message = assertion(results)</code></pre>
+
+      <h3 id="run-perf-assertions">run_performance_assertions</h3>
+      <div class="method-sig"><code>run_performance_assertions(metrics, assertions)</code></div>
+      <p>Evaluate a list of performance assertions against a metrics dict.</p>
+      <pre><code class="language-python">from loadspiker import Engine, Scenario
+from loadspiker.performance_assertions import (
+    throughput_at_least,
+    avg_response_time_under,
+    max_response_time_under,
+    error_rate_below,
+    success_rate_at_least,
+    run_performance_assertions
+)
+
+engine = Engine(max_connections=200, worker_threads=8)
+scenario = Scenario("SLA Validation Test")
+scenario.get("https://api.example.com/products")
+scenario.get("https://api.example.com/users")
+
+results = engine.run_scenario(scenario, users=100, duration=120)
+
+passed, failures = run_performance_assertions(results, [
+    throughput_at_least(50.0),         # at least 50 RPS
+    avg_response_time_under(300),       # avg < 300ms
+    max_response_time_under(10000),     # no request > 10s
+    error_rate_below(0.02),            # less than 2% errors
+    success_rate_at_least(0.98),        # at least 98% success
+])
+
+if passed:
+    print("SLA PASSED: All performance assertions satisfied.")
+else:
+    print("SLA FAILED:")
+    for failure in failures:
+        print(f"  - {failure}")
+    raise SystemExit(1)  # Non-zero exit for CI pipelines</code></pre>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#overview">Overview</a>
+      <a href="#response-assertions">Response Assertions</a>
+      <a href="#status-is" class="toc-sub">status_is</a>
+      <a href="#response-time-under" class="toc-sub">response_time_under</a>
+      <a href="#body-contains" class="toc-sub">body_contains</a>
+      <a href="#body-matches" class="toc-sub">body_matches</a>
+      <a href="#json-path" class="toc-sub">json_path</a>
+      <a href="#header-exists" class="toc-sub">header_exists</a>
+      <a href="#custom-assertion" class="toc-sub">custom_assertion</a>
+      <a href="#assertion-groups" class="toc-sub">AssertionGroup</a>
+      <a href="#run-assertions" class="toc-sub">run_assertions</a>
+      <a href="#performance-assertions">Performance Assertions</a>
+      <a href="#throughput-at-least" class="toc-sub">throughput_at_least</a>
+      <a href="#avg-response-time" class="toc-sub">avg_response_time_under</a>
+      <a href="#error-rate-below" class="toc-sub">error_rate_below</a>
+      <a href="#success-rate" class="toc-sub">success_rate_at_least</a>
+      <a href="#max-response-time" class="toc-sub">max_response_time_under</a>
+      <a href="#run-perf-assertions" class="toc-sub">run_performance_assertions</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

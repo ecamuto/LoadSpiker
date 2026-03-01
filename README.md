@@ -23,6 +23,35 @@ A high-performance load testing tool with a C engine and Python scripting interf
 - **Data-Driven Testing**: CSV file support for parameterized load testing with multiple distribution strategies
 - **Multi-User Session Isolation**: Complete separation of session data between virtual users
 
+## Documentation
+
+Full documentation is available as a static HTML site:
+
+```text
+docs/site/index.html
+```
+
+| Page | Description |
+| ---- | ----------- |
+| [Home](docs/site/index.html) | Overview, features, quick-start |
+| [Getting Started](docs/site/getting-started.html) | Installation, requirements, first test |
+| [API Reference](docs/site/api-reference.html) | Engine, Scenario, Reporters, Utilities |
+| [CLI Reference](docs/site/cli.html) | All CLI flags and load-pattern syntax |
+| [Protocols](docs/site/protocols.html) | HTTP, WebSocket, TCP, UDP, MQTT, Database |
+| [Assertions](docs/site/assertions.html) | Response and performance assertions |
+| [Sessions & Auth](docs/site/sessions-auth.html) | Session management and authentication flows |
+| [Architecture](docs/site/architecture.html) | C engine internals, threading, memory model |
+| [Troubleshooting](docs/site/troubleshooting.html) | Common errors and debug techniques |
+| [Roadmap](docs/site/roadmap.html) | Planned phases and changelog |
+| [Contributing](docs/site/contributing.html) | Dev setup, code style, PR checklist |
+
+Open locally:
+
+```bash
+open docs/site/index.html        # macOS
+xdg-open docs/site/index.html    # Linux
+```
+
 ## Quick Start
 
 ### Installation

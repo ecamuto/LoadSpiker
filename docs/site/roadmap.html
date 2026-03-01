@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roadmap &amp; Changelog — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html" class="active"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Roadmap &amp; Changelog</h1>
+      <p class="page-lead">LoadSpiker's development phases, planned features, and version history.</p>
+
+      <!-- ===================== PHASE 1 ===================== -->
+      <h2 id="phase1">Phase 1: Foundation <span class="badge badge-green">COMPLETED</span> — Q1 2025</h2>
+
+      <ul>
+        <li>C engine core with libcurl-based HTTP/HTTPS support</li>
+        <li>Python C extension (<code>python_extension.c</code>) with full HTTP API surface</li>
+        <li>Worker thread pool (POSIX pthreads) with configurable concurrency</li>
+        <li>Connection pool with per-handle CURL management</li>
+        <li>Multi-protocol architecture: WebSocket, TCP, UDP, MQTT, Database stubs</li>
+        <li>WebSocket support (Phase 1 simulation — connection overhead measurement)</li>
+        <li>MQTT C implementation: CONNECT, PUBLISH, SUBSCRIBE, DISCONNECT packets</li>
+        <li>TCP C implementation: socket-based connect, send, receive, disconnect</li>
+        <li>UDP C implementation: endpoint create, send, receive, close</li>
+        <li>Database C implementation: simulated connection pool with configurable latency</li>
+        <li>Python Scenario API: <code>get()</code>, <code>post()</code>, <code>put()</code>, <code>delete()</code>, <code>add_request()</code></li>
+        <li>Data-driven testing with CSV support: sequential, random, round-robin strategies</li>
+        <li>Assertion system: <code>status_is</code>, <code>body_contains</code>, <code>json_path</code>, <code>body_matches</code>, <code>header_exists</code>, <code>custom_assertion</code>, <code>AssertionGroup</code></li>
+        <li>Performance assertions: <code>throughput_at_least</code>, <code>avg_response_time_under</code>, <code>error_rate_below</code>, <code>success_rate_at_least</code>, <code>max_response_time_under</code></li>
+        <li>Session management: thread-safe <code>SessionStore</code>, cookie handling, token storage</li>
+        <li>Request correlation: JSON path, header, cookie, and regex extraction rules</li>
+        <li>Authentication flows: Basic, Bearer, API Key, Form-based, OAuth 2.0, Custom</li>
+        <li>Reporter system: <code>ConsoleReporter</code>, <code>JSONReporter</code>, <code>HTMLReporter</code>, <code>MultiReporter</code></li>
+        <li>Load utilities: <code>ramp_up()</code>, <code>spike_test()</code>, <code>stress_test()</code>, <code>constant_load()</code></li>
+        <li>CLI interface with load pattern syntax, interactive mode, and config file support</li>
+        <li>Built-in benchmarks achieving 10,000+ req/s on commodity hardware</li>
+        <li>Comprehensive test suite: unit, integration, and performance tests</li>
+        <li>Memory-safe C code: <code>strncpy</code>/<code>snprintf</code> everywhere, malloc NULL checks, cleanup functions</li>
+      </ul>
+
+      <!-- ===================== PHASE 2 ===================== -->
+      <h2 id="phase2">Phase 2: Advanced Testing Capabilities <span class="badge badge-yellow">PLANNED</span></h2>
+
+      <h3>2.1 Distributed Testing</h3>
+      <ul>
+        <li>Master-worker architecture for coordinating load across multiple machines</li>
+        <li>Docker Compose configuration for spinning up distributed test clusters</li>
+        <li>Kubernetes operator for cloud-native load test orchestration</li>
+        <li>Synchronized scenario execution and centralized metrics aggregation</li>
+        <li>Automatic worker discovery via DNS or static host lists</li>
+      </ul>
+
+      <h3>2.2 Advanced Load Patterns</h3>
+      <ul>
+        <li>Extended data sources: JSON, database queries, API feeds as scenario data</li>
+        <li>Conditional request logic based on previous response values</li>
+        <li>Variable think times sampled from statistical distributions (normal, exponential)</li>
+        <li>Per-user weight factors for heterogeneous scenario mixes</li>
+      </ul>
+
+      <h3>2.3 Dynamic Scaling</h3>
+      <ul>
+        <li>Auto-scaling worker count based on measured CPU utilization and queue depth</li>
+        <li>Feedback-controlled load generation to hold a target RPS</li>
+        <li>Graceful scale-down with in-flight request completion</li>
+      </ul>
+
+      <!-- ===================== PHASE 3 ===================== -->
+      <h2 id="phase3">Phase 3: Enterprise Reporting <span class="badge badge-yellow">PLANNED</span></h2>
+
+      <h3>3.1 Advanced Analytics</h3>
+      <ul>
+        <li>Real-time dashboards with WebSocket-streamed live metrics</li>
+        <li>P50, P75, P90, P95, P99, P99.9 response time percentile calculations</li>
+        <li>Apdex score computation and SLA compliance reporting</li>
+        <li>Response time distribution histograms and heatmaps</li>
+        <li>Comparative analysis: side-by-side comparison of multiple test runs</li>
+        <li>Trend analysis over time across repeated CI/CD runs</li>
+      </ul>
+
+      <h3>3.2 CI/CD Integration</h3>
+      <ul>
+        <li>Jenkins plugin with JUnit XML output and build failure on SLA breach</li>
+        <li>GitLab CI template and native performance test artifact upload</li>
+        <li>GitHub Actions marketplace action with PR comment posting</li>
+        <li>Prometheus metrics endpoint for real-time scraping</li>
+        <li>Grafana dashboard JSON templates for instant visualization setup</li>
+        <li>Slack and PagerDuty alerting integration</li>
+      </ul>
+
+      <!-- ===================== PHASE 4 ===================== -->
+      <h2 id="phase4">Phase 4: User Experience <span class="badge badge-yellow">PLANNED</span></h2>
+
+      <h3>4.1 Web-Based GUI</h3>
+      <ul>
+        <li>React or Vue web application for scenario authoring without writing code</li>
+        <li>Visual load shape designer (drag-and-drop ramp, spike, step patterns)</li>
+        <li>Real-time test monitoring dashboard accessible from any browser</li>
+        <li>Test library: save, version, and reuse scenario configurations</li>
+      </ul>
+
+      <h3>4.2 Developer Tooling</h3>
+      <ul>
+        <li>VS Code extension with scenario syntax highlighting and inline metrics</li>
+        <li>JetBrains plugin for PyCharm and IntelliJ</li>
+        <li>CLI enhancements: shell completion for Bash, Zsh, Fish</li>
+        <li>HAR file import: generate scenarios from browser recordings</li>
+        <li>Browser extension for recording and exporting test scenarios</li>
+        <li>OpenAPI / Swagger spec import for automatic scenario scaffolding</li>
+      </ul>
+
+      <!-- ===================== PHASE 5 ===================== -->
+      <h2 id="phase5">Phase 5: Enterprise Features <span class="badge badge-yellow">PLANNED</span></h2>
+
+      <h3>5.1 Security Testing</h3>
+      <ul>
+        <li>OWASP Top 10 load testing profiles (injection, auth bypass, etc.)</li>
+        <li>TLS/SSL certificate validation and mTLS client certificate support</li>
+        <li>Fuzzing mode: automatically mutate request payloads for robustness testing</li>
+        <li>Authentication bypass probing with safe, non-destructive test patterns</li>
+      </ul>
+
+      <h3>5.2 Massive Scale</h3>
+      <ul>
+        <li>1,000,000+ concurrent virtual user support via distributed agents</li>
+        <li>Geo-distributed load injection from multiple cloud regions</li>
+        <li>Bandwidth simulation and network condition modeling (latency, packet loss)</li>
+        <li>Long-duration soak testing (24h+) with memory leak detection integration</li>
+      </ul>
+
+      <!-- ===================== COMPARISON ===================== -->
+      <h2 id="comparison">Competitive Comparison</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>LoadSpiker</th>
+            <th>JMeter</th>
+            <th>Gatling</th>
+            <th>Locust</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Engine</td><td>C (native)</td><td>Java (JVM)</td><td>Scala (JVM)</td><td>Python</td></tr>
+          <tr><td>Scripting</td><td>Python</td><td>Java / Groovy</td><td>Scala DSL</td><td>Python</td></tr>
+          <tr><td>Performance</td><td><span class="badge badge-green">10K+ req/s</span></td><td>Medium</td><td>High</td><td>Medium</td></tr>
+          <tr><td>Memory Footprint</td><td><span class="badge badge-green">Very Low</span></td><td>High (JVM)</td><td>High (JVM)</td><td>Medium</td></tr>
+          <tr><td>HTTP/HTTPS</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td></tr>
+          <tr><td>WebSocket</td><td><span class="partial">~</span> (Phase 1)</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="partial">~</span> (plugin)</td></tr>
+          <tr><td>MQTT</td><td><span class="check">✓</span></td><td><span class="check">✓</span> (plugin)</td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td></tr>
+          <tr><td>TCP / UDP</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td></tr>
+          <tr><td>Session Management</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="partial">~</span></td></tr>
+          <tr><td>Auth Flows</td><td><span class="check">✓</span> 6 types</td><td><span class="check">✓</span></td><td><span class="partial">~</span></td><td><span class="partial">~</span></td></tr>
+          <tr><td>Assertions</td><td><span class="check">✓</span> Rich API</td><td><span class="partial">~</span></td><td><span class="check">✓</span></td><td><span class="partial">~</span></td></tr>
+          <tr><td>Real-time Metrics</td><td><span class="check">✓</span></td><td><span class="partial">~</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td></tr>
+          <tr><td>HTML Reports</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="partial">~</span> (plugin)</td></tr>
+          <tr><td>Distributed Testing</td><td>Phase 2</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td></tr>
+          <tr><td>GUI / IDE Plugin</td><td>Phase 4</td><td><span class="check">✓</span></td><td><span class="partial">~</span></td><td><span class="cross">✗</span></td></tr>
+          <tr><td>CI/CD Integration</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td><span class="check">✓</span></td></tr>
+          <tr><td>Open Source</td><td><span class="check">✓</span> MIT</td><td><span class="check">✓</span> Apache 2</td><td><span class="check">✓</span> Apache 2</td><td><span class="check">✓</span> MIT</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ===================== CHANGELOG ===================== -->
+      <h2 id="changelog">Changelog</h2>
+
+      <h3>[Unreleased]</h3>
+      <p><strong>Added</strong></p>
+      <ul>
+        <li>Python bindings for TCP, UDP, MQTT, and Database protocol methods (in progress)</li>
+        <li>WebSocket real-message exchange via libwebsockets integration (planned)</li>
+        <li>P95 / P99 percentile tracking in the C engine metrics layer</li>
+        <li><code>make test-asan</code> target for AddressSanitizer test runs</li>
+      </ul>
+      <p><strong>Fixed</strong></p>
+      <ul>
+        <li>Memory leak in MQTT CONNECT packet builder when password was NULL</li>
+        <li>Race condition in WebSocket connection table on concurrent close operations</li>
+        <li>UDP receive returning stale data when buffer was not zeroed between calls</li>
+        <li>HTTP response header parsing failing on headers with colons in values</li>
+      </ul>
+      <p><strong>Changed</strong></p>
+      <ul>
+        <li>Improved <code>engine_detect_protocol()</code> to return <code>PROTOCOL_HTTP</code> as default instead of error</li>
+        <li>Session cookie storage now uses a sorted list for deterministic header ordering</li>
+        <li>JSONReporter now outputs ISO 8601 timestamps</li>
+      </ul>
+      <p><strong>Security</strong></p>
+      <ul>
+        <li>MQTT passwords are now zeroed from memory immediately after CONNECT packet transmission</li>
+        <li>All string copies in C code now use <code>strncpy</code> with explicit size bounds</li>
+      </ul>
+
+      <h3>[1.0.0] — 2025 Q1</h3>
+      <p><strong>Initial Release</strong></p>
+      <ul>
+        <li>C engine core with libcurl HTTP/HTTPS support and connection pooling</li>
+        <li>Python C extension with full API surface</li>
+        <li>Multi-protocol architecture (HTTP real, WebSocket/Database simulated)</li>
+        <li>Scenario API: Scenario, RESTAPIScenario, WebsiteScenario, MQTTScenario</li>
+        <li>Assertion system: response assertions and performance assertions</li>
+        <li>Session management with thread-safe SessionStore and request correlation</li>
+        <li>Authentication: Basic, Bearer, API Key, Form-based, OAuth 2.0, Custom</li>
+        <li>Reporter system: Console, JSON, HTML, Multi</li>
+        <li>CLI with interactive mode, load patterns, config files</li>
+        <li>Data-driven CSV testing with sequential/random/round-robin strategies</li>
+        <li>Complete test suite with unit, integration, and performance tests</li>
+        <li>Build system: Makefile with install-deps, build, test, debug, benchmark targets</li>
+      </ul>
+
+      <!-- ===================== KNOWN ISSUES ===================== -->
+      <h2 id="known-issues">Known Issues</h2>
+
+      <div class="callout warn">
+        <strong>Missing C Extension Protocol Bindings:</strong> TCP, UDP, MQTT, and Database C implementations exist and compile, but are not yet exposed as Python methods. Tests for these protocols are skipped automatically. Track progress in <a href="architecture.html#python-extension">Architecture: Python C Extension</a>.
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Category</th>
+            <th>Known Issues</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>python_extension.c</code></td>
+            <td>Bindings</td>
+            <td>TCP, UDP, MQTT, Database methods not exposed to Python</td>
+          </tr>
+          <tr>
+            <td><code>websocket.c</code></td>
+            <td>Protocol</td>
+            <td>Phase 1 simulation only — no real WS message exchange</td>
+          </tr>
+          <tr>
+            <td><code>database.c</code></td>
+            <td>Protocol</td>
+            <td>Simulated connection pool — no real DB driver integration</td>
+          </tr>
+          <tr>
+            <td><code>authentication.py</code></td>
+            <td>Analysis</td>
+            <td>Not yet included in CODE_ANALYSIS.md automated analysis pass</td>
+          </tr>
+          <tr>
+            <td><code>session_manager.py</code></td>
+            <td>Analysis</td>
+            <td>Not yet included in CODE_ANALYSIS.md automated analysis pass</td>
+          </tr>
+          <tr>
+            <td>All protocols</td>
+            <td>Distribution</td>
+            <td>Distributed multi-machine testing not yet implemented (Phase 2)</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#phase1">Phase 1: Completed</a>
+      <a href="#phase2">Phase 2: Advanced Testing</a>
+      <a href="#phase3">Phase 3: Reporting</a>
+      <a href="#phase4">Phase 4: User Experience</a>
+      <a href="#phase5">Phase 5: Enterprise</a>
+      <a href="#comparison">Competitive Comparison</a>
+      <a href="#changelog">Changelog</a>
+      <a href="#known-issues">Known Issues</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

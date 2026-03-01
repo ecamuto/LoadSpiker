@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sessions &amp; Authentication — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html" class="active"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Sessions &amp; Authentication</h1>
+      <p class="page-lead">Manage per-user session state and authenticate against protected APIs during load tests.</p>
+
+      <h2 id="overview">Overview</h2>
+      <p>LoadSpiker provides two complementary subsystems for stateful testing:</p>
+      <ul>
+        <li><strong>SessionManager</strong> — Thread-safe per-user session storage. Tracks cookies, tokens, and arbitrary key-value state across requests in a scenario run.</li>
+        <li><strong>AuthenticationManager</strong> — Pluggable authentication flows. Supports Basic Auth, Bearer tokens, API Keys, Form-based login, OAuth 2.0, and custom flows.</li>
+      </ul>
+
+      <div class="callout info">
+        <strong>Import paths:</strong>
+        <ul style="margin:.5rem 0 0 0">
+          <li><code>from loadspiker.session_manager import get_session_manager, SessionStore</code></li>
+          <li><code>from loadspiker.authentication import get_authentication_manager</code></li>
+        </ul>
+      </div>
+
+      <!-- ===================== SESSION MANAGER ===================== -->
+      <h2 id="session-manager">Session Management</h2>
+
+      <p>The <code>SessionManager</code> is a singleton that provides a separate <code>SessionStore</code> per virtual user (keyed by user ID). All operations are thread-safe.</p>
+
+      <pre><code class="language-python">from loadspiker.session_manager import get_session_manager
+
+sm = get_session_manager()  # Returns the singleton instance</code></pre>
+
+      <h3 id="session-methods">Core SessionManager Methods</h3>
+
+      <div class="method-sig"><code>sm.get_session(user_id)</code></div>
+      <p>Get or create a <code>SessionStore</code> for the given user ID. Creates a new store if none exists.</p>
+
+      <div class="method-sig"><code>sm.prepare_request_headers(user_id, base_headers=None)</code></div>
+      <p>Returns a headers dict merged with the session's stored authentication headers and cookies. Use this before every authenticated request.</p>
+
+      <div class="method-sig"><code>sm.auto_handle_cookies(user_id, response)</code></div>
+      <p>Parse <code>Set-Cookie</code> headers from a response and store them in the user's session. Subsequent requests via <code>prepare_request_headers</code> will include these cookies.</p>
+
+      <div class="method-sig"><code>sm.process_response(user_id, response, extract_rules=None)</code></div>
+      <p>Process a response: auto-handle cookies and optionally extract values using <code>extract_rules</code>. See <a href="#request-correlation">Request Correlation</a>.</p>
+
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.session_manager import get_session_manager
+
+engine = Engine()
+sm = get_session_manager()
+user_id = "user-001"
+
+# Login request — cookies are extracted automatically
+login_response = engine.execute_request(
+    "https://app.example.com/login",
+    method="POST",
+    body='{"username": "alice", "password": "secret"}',
+    headers={"Content-Type": "application/json"}
+)
+sm.process_response(user_id, login_response)
+
+# Subsequent requests automatically include the session cookie
+headers = sm.prepare_request_headers(user_id)
+profile_response = engine.execute_request(
+    "https://app.example.com/profile",
+    headers=headers
+)</code></pre>
+
+      <h3 id="session-store">SessionStore</h3>
+      <p>Each user has an isolated <code>SessionStore</code> instance with the following methods:</p>
+
+      <div class="method-sig"><code>store.set(key, value)</code> / <code>store.get(key, default=None)</code></div>
+      <p>Store and retrieve arbitrary session state.</p>
+
+      <div class="method-sig"><code>store.set_token(token, token_type="Bearer")</code> / <code>store.get_token()</code></div>
+      <p>Store and retrieve an authentication token. <code>get_token()</code> returns a dict with <code>token</code> and <code>token_type</code>.</p>
+
+      <div class="method-sig"><code>store.set_cookie(name, value, domain=None, path="/")</code></div>
+      <div class="method-sig"><code>store.get_cookie(name)</code> / <code>store.get_all_cookies()</code></div>
+      <p>Manage cookies in the session store.</p>
+
+      <pre><code class="language-python">from loadspiker.session_manager import get_session_manager
+
+sm = get_session_manager()
+store = sm.get_session("user-42")
+
+# Store arbitrary state
+store.set("cart_id", "abc-123")
+store.set("user_tier", "premium")
+
+cart_id = store.get("cart_id")
+
+# Store a JWT token
+store.set_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", token_type="Bearer")
+token_info = store.get_token()
+
+# Manual cookie management
+store.set_cookie("session_id", "s-xyz-456", domain="app.example.com")
+session_cookie = store.get_cookie("session_id")
+all_cookies = store.get_all_cookies()</code></pre>
+
+      <h3 id="request-correlation">Request Correlation</h3>
+      <p>Extract values from responses and store them in the session using extraction rules.</p>
+
+      <table>
+        <thead><tr><th>Rule Type</th><th>Field</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>json_path</code></td><td><code>path</code>, <code>store_as</code></td><td>Extract a value from a JSON response body using dot-notation path</td></tr>
+          <tr><td><code>header</code></td><td><code>header_name</code>, <code>store_as</code></td><td>Extract a response header value</td></tr>
+          <tr><td><code>cookie</code></td><td><code>cookie_name</code>, <code>store_as</code></td><td>Extract a cookie value from Set-Cookie headers</td></tr>
+          <tr><td><code>regex</code></td><td><code>pattern</code>, <code>group</code>, <code>store_as</code></td><td>Extract using a regular expression on the response body</td></tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.session_manager import get_session_manager
+
+engine = Engine()
+sm = get_session_manager()
+user_id = "user-001"
+
+# Login and extract the JWT token from the response body
+login_response = engine.execute_request(
+    "https://api.example.com/auth/login",
+    method="POST",
+    body='{"username": "alice", "password": "secret"}',
+    headers={"Content-Type": "application/json"}
+)
+
+sm.process_response(user_id, login_response, extract_rules=[
+    {"type": "json_path",  "path": "token",        "store_as": "auth_token"},
+    {"type": "json_path",  "path": "user.id",       "store_as": "user_id"},
+    {"type": "header",     "header_name": "X-Req-Id", "store_as": "request_id"},
+    {"type": "regex",      "pattern": r'"csrf":"([^"]+)"', "group": 1, "store_as": "csrf_token"},
+])
+
+store = sm.get_session(user_id)
+token = store.get("auth_token")
+
+# Use extracted token for subsequent requests
+response = engine.execute_request(
+    "https://api.example.com/orders",
+    headers={
+        "Authorization": f"Bearer {token}",
+        "X-CSRF-Token": store.get("csrf_token"),
+    }
+)</code></pre>
+
+      <!-- ===================== AUTHENTICATION ===================== -->
+      <h2 id="authentication">Authentication</h2>
+
+      <p>The <code>AuthenticationManager</code> singleton manages named authentication flows that can be applied to scenarios.</p>
+
+      <pre><code class="language-python">from loadspiker.authentication import get_authentication_manager
+
+am = get_authentication_manager()  # Returns the singleton instance</code></pre>
+
+      <h3>AuthenticationManager Methods</h3>
+
+      <div class="method-sig"><code>am.register_flow(name, flow)</code></div>
+      <p>Register a named authentication flow for later use.</p>
+
+      <div class="method-sig"><code>am.authenticate(flow_name, user_id, engine)</code></div>
+      <p>Execute the named flow for the given user. Stores resulting tokens/cookies in the user's SessionStore.</p>
+
+      <div class="method-sig"><code>am.is_authenticated(flow_name, user_id)</code></div>
+      <p>Returns True if the user currently has valid authentication for the named flow.</p>
+
+      <div class="method-sig"><code>am.logout(flow_name, user_id)</code></div>
+      <p>Invalidate and clear the user's authentication state for the named flow.</p>
+
+      <div class="method-sig"><code>am.get_auth_headers(flow_name, user_id)</code></div>
+      <p>Returns the appropriate HTTP headers to authenticate a request for the named flow and user.</p>
+
+      <h3 id="basic-auth">Basic Authentication</h3>
+      <div class="method-sig"><code>am.create_basic_auth(username, password)</code></div>
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.authentication import get_authentication_manager
+
+engine = Engine()
+am = get_authentication_manager()
+
+basic_flow = am.create_basic_auth(username="admin", password="secret")
+am.register_flow("basic", basic_flow)
+
+am.authenticate("basic", "user-001", engine)
+
+headers = am.get_auth_headers("basic", "user-001")
+# headers = {"Authorization": "Basic YWRtaW46c2VjcmV0"}
+response = engine.execute_request("https://api.example.com/admin", headers=headers)</code></pre>
+
+      <h3 id="bearer-auth">Bearer Token Authentication</h3>
+      <div class="method-sig"><code>am.create_bearer_auth(token=None, token_endpoint=None, client_id=None, client_secret=None)</code></div>
+      <pre><code class="language-python">from loadspiker.authentication import get_authentication_manager
+
+am = get_authentication_manager()
+
+# Static token
+bearer_flow = am.create_bearer_auth(token="eyJhbGciOiJIUzI1NiJ9...")
+am.register_flow("bearer", bearer_flow)
+
+# Dynamic token from endpoint (fetched on first authenticate() call)
+dynamic_flow = am.create_bearer_auth(
+    token_endpoint="https://auth.example.com/token",
+    client_id="my-client",
+    client_secret="my-secret"
+)
+am.register_flow("dynamic_bearer", dynamic_flow)</code></pre>
+
+      <h3 id="api-key-auth">API Key Authentication</h3>
+      <div class="method-sig"><code>am.create_api_key_auth(api_key, header_name="X-API-Key", location="header")</code></div>
+      <pre><code class="language-python">from loadspiker.authentication import get_authentication_manager
+
+am = get_authentication_manager()
+
+# Header-based API key
+api_key_flow = am.create_api_key_auth(
+    api_key="sk-live-abc123",
+    header_name="X-API-Key"
+)
+am.register_flow("apikey", api_key_flow)
+
+# Custom header name (e.g. some APIs use "api-token")
+custom_flow = am.create_api_key_auth(
+    api_key="my-secret-key",
+    header_name="api-token"
+)
+am.register_flow("custom_key", custom_flow)
+
+headers = am.get_auth_headers("apikey", "user-001")
+# headers = {"X-API-Key": "sk-live-abc123"}</code></pre>
+
+      <h3 id="form-auth">Form-Based Authentication</h3>
+      <div class="method-sig"><code>am.create_form_auth(login_url, username, password, username_field="username", password_field="password", success_indicator=None)</code></div>
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.authentication import get_authentication_manager
+
+engine = Engine()
+am = get_authentication_manager()
+
+form_flow = am.create_form_auth(
+    login_url="https://app.example.com/login",
+    username="test_user",
+    password="test_password",
+    username_field="email",         # field name in the form
+    password_field="password",
+    success_indicator='"logged_in": true'  # string to look for in response
+)
+am.register_flow("form", form_flow)
+
+# Authenticate (performs the login POST and stores session cookies)
+am.authenticate("form", "user-001", engine)
+
+# All cookies from the login response are now in the session
+headers = am.get_auth_headers("form", "user-001")</code></pre>
+
+      <h3 id="oauth2">OAuth 2.0</h3>
+      <div class="method-sig"><code>am.create_oauth2_auth(client_id, client_secret, auth_url=None, token_url=None, scope=None, grant_type="client_credentials")</code></div>
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.authentication import get_authentication_manager
+
+engine = Engine()
+am = get_authentication_manager()
+
+# Client Credentials flow (machine-to-machine)
+oauth2_flow = am.create_oauth2_auth(
+    client_id="my-app-client-id",
+    client_secret="my-app-client-secret",
+    token_url="https://auth.example.com/oauth/token",
+    scope="read:users write:orders",
+    grant_type="client_credentials"
+)
+am.register_flow("oauth2", oauth2_flow)
+
+# Authenticate (fetches and caches the access token)
+am.authenticate("oauth2", "user-001", engine)
+
+headers = am.get_auth_headers("oauth2", "user-001")
+# headers = {"Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9..."}</code></pre>
+
+      <h3 id="custom-auth">Custom Authentication</h3>
+      <div class="method-sig"><code>am.create_custom_auth(auth_function)</code></div>
+      <p>Provide a callable <code>auth_function(user_id, engine, session_store)</code> that performs authentication and populates the session store with tokens or cookies.</p>
+      <pre><code class="language-python">import json
+from loadspiker import Engine
+from loadspiker.authentication import get_authentication_manager
+
+engine = Engine()
+am = get_authentication_manager()
+
+def my_auth_fn(user_id, engine, session_store):
+    """Custom two-step authentication flow."""
+    # Step 1: Get CSRF token from the login page
+    csrf_response = engine.execute_request("https://app.example.com/login")
+    import re
+    csrf_match = re.search(r'name="csrf_token" value="([^"]+)"', csrf_response['body'])
+    csrf_token = csrf_match.group(1) if csrf_match else ""
+
+    # Step 2: Submit login form with CSRF token
+    login_response = engine.execute_request(
+        "https://app.example.com/login",
+        method="POST",
+        body=f"username=testuser&password=secret&csrf_token={csrf_token}",
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+
+    # Extract and store session cookie
+    session_cookie = login_response['headers'].get('Set-Cookie', '')
+    session_store.set_cookie("session", session_cookie)
+    session_store.set("authenticated", True)
+
+custom_flow = am.create_custom_auth(my_auth_fn)
+am.register_flow("custom", custom_flow)
+am.authenticate("custom", "user-001", engine)</code></pre>
+
+      <!-- ===================== MULTI-USER ===================== -->
+      <h2 id="multi-user">Multi-User Session Isolation</h2>
+      <p>Each virtual user maintains completely isolated session state. This is essential for realistic load tests simulating many concurrent users.</p>
+
+      <pre><code class="language-python">from loadspiker import Engine
+from loadspiker.session_manager import get_session_manager
+from loadspiker.authentication import get_authentication_manager
+
+engine = Engine(max_connections=50)
+sm = get_session_manager()
+am = get_authentication_manager()
+
+users = [
+    {"id": "alice",   "username": "alice",   "password": "pass_alice"},
+    {"id": "bob",     "username": "bob",     "password": "pass_bob"},
+    {"id": "charlie", "username": "charlie", "password": "pass_charlie"},
+]
+
+for user in users:
+    # Each user gets their own session store
+    flow = am.create_form_auth(
+        login_url="https://app.example.com/login",
+        username=user["username"],
+        password=user["password"]
+    )
+    flow_name = f"form_{user['id']}"
+    am.register_flow(flow_name, flow)
+    am.authenticate(flow_name, user["id"], engine)
+
+    store = sm.get_session(user["id"])
+    print(f"{user['id']} cookies: {store.get_all_cookies()}")
+
+# Run scenario with per-user sessions
+from loadspiker import Scenario
+scenario = Scenario("Multi-User Test")
+scenario.get("https://app.example.com/dashboard")
+
+results = engine.run_scenario(scenario, users=len(users), duration=30)</code></pre>
+
+      <!-- ===================== BEST PRACTICES ===================== -->
+      <h2 id="best-practices">Best Practices</h2>
+      <ul>
+        <li><strong>Authenticate before the measurement window:</strong> Run a warm-up or setup phase to authenticate all virtual users before starting timed measurements. Use <code>engine.reset_metrics()</code> after warm-up.</li>
+        <li><strong>Use unique user IDs per virtual user:</strong> Pass a string like <code>f"user-{thread_id}"</code> as the <code>user_id</code> to ensure complete session isolation across concurrent threads.</li>
+        <li><strong>Handle token expiry:</strong> Check <code>am.is_authenticated()</code> periodically and call <code>am.authenticate()</code> again if tokens have expired during long-running tests.</li>
+        <li><strong>Clean up after tests:</strong> Call <code>am.logout()</code> to clean up server-side sessions at the end of a test run, especially during integration testing against real backends.</li>
+        <li><strong>Avoid sharing session stores:</strong> Never share a <code>SessionStore</code> object between virtual users — this defeats the purpose of isolation and will cause data races.</li>
+        <li><strong>Store minimal state:</strong> Only persist what is needed for correlation. Overly large session stores (e.g., storing full response bodies) will increase memory usage under high user counts.</li>
+        <li><strong>Rotate credentials:</strong> For large-scale tests, provision a pool of test users with separate credentials. Reuse of a single credential across all virtual users may trigger server-side rate limits or lock-outs.</li>
+      </ul>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#overview">Overview</a>
+      <a href="#session-manager">Session Management</a>
+      <a href="#session-methods" class="toc-sub">Core Methods</a>
+      <a href="#session-store" class="toc-sub">SessionStore</a>
+      <a href="#request-correlation" class="toc-sub">Request Correlation</a>
+      <a href="#authentication">Authentication</a>
+      <a href="#basic-auth" class="toc-sub">Basic Auth</a>
+      <a href="#bearer-auth" class="toc-sub">Bearer Token</a>
+      <a href="#api-key-auth" class="toc-sub">API Key</a>
+      <a href="#form-auth" class="toc-sub">Form-Based</a>
+      <a href="#oauth2" class="toc-sub">OAuth 2.0</a>
+      <a href="#custom-auth" class="toc-sub">Custom Auth</a>
+      <a href="#multi-user">Multi-User Isolation</a>
+      <a href="#best-practices">Best Practices</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

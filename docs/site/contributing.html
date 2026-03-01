@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contributing — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html" class="active"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Contributing</h1>
+      <p class="page-lead">Thank you for your interest in contributing to LoadSpiker. This guide covers everything you need to set up a development environment, understand the codebase, follow code style guidelines, and submit a pull request.</p>
+
+      <!-- ===================== SETUP ===================== -->
+      <h2 id="setup">Development Setup</h2>
+
+      <h3>Prerequisites</h3>
+      <table>
+        <thead><tr><th>Tool</th><th>Version</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Python</td><td>3.7+</td><td>Runtime and test execution</td></tr>
+          <tr><td>GCC or Clang</td><td>GCC 7+ / Clang 6+</td><td>C engine compilation</td></tr>
+          <tr><td>GNU Make</td><td>3.81+</td><td>Build orchestration</td></tr>
+          <tr><td>libcurl</td><td>7.60+</td><td>HTTP engine dependency</td></tr>
+          <tr><td>pkg-config</td><td>any</td><td>Library detection during build</td></tr>
+          <tr><td>pytest</td><td>6.0+</td><td>Python test runner</td></tr>
+          <tr><td>Valgrind (optional)</td><td>any</td><td>Memory checking on Linux</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Setup Steps</h3>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Fork and clone</h4>
+            <pre><code class="language-bash">git clone https://github.com/YOUR_USERNAME/loadspiker.git
+cd loadspiker
+git remote add upstream https://github.com/loadspiker/loadspiker.git</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Install system dependencies</h4>
+            <pre><code class="language-bash">make install-deps</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Complete developer setup (deps + build + install + test)</h4>
+            <pre><code class="language-bash">make dev-setup</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Verify everything works</h4>
+            <pre><code class="language-bash">make build
+make test
+python3 -c "import loadspiker; print('OK')"</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== STRUCTURE ===================== -->
+      <h2 id="structure">Project Structure</h2>
+
+      <pre><code class="language-bash">loadspiker/
+├── src/                        # C source files
+│   ├── engine.c                # Core engine, HTTP via libcurl, thread pool
+│   ├── engine.h                # Engine public API header
+│   ├── websocket.c / .h        # WebSocket implementation
+│   ├── tcp.c / .h              # TCP implementation
+│   ├── udp.c / .h              # UDP implementation
+│   ├── mqtt.c / .h             # MQTT implementation
+│   ├── database.c / .h         # Database simulation
+│   └── python_extension.c      # Python C extension bridge
+│
+├── loadspiker/                 # Python package
+│   ├── __init__.py             # Public API exports
+│   ├── engine.py               # Engine Python class (wraps C extension)
+│   ├── scenario.py             # Scenario, RESTAPIScenario, WebsiteScenario
+│   ├── scenarios/              # Protocol-specific scenario classes
+│   │   ├── mqtt_scenario.py
+│   │   ├── tcp_scenario.py
+│   │   └── websocket_scenario.py
+│   ├── assertions.py           # Response assertion functions
+│   ├── performance_assertions.py # Performance assertion functions
+│   ├── session_manager.py      # SessionManager and SessionStore
+│   ├── authentication.py       # AuthenticationManager and flow factories
+│   ├── reporters/              # Output formatters
+│   │   ├── console_reporter.py
+│   │   ├── json_reporter.py
+│   │   ├── html_reporter.py
+│   │   └── multi_reporter.py
+│   └── utils.py                # ramp_up, spike_test, stress_test, etc.
+│
+├── tests/                      # Test suite
+│   ├── test_engine.py          # Engine unit and integration tests
+│   ├── test_scenario.py        # Scenario tests
+│   ├── test_assertions.py      # Assertion tests
+│   ├── test_performance_assertions.py
+│   ├── test_session_manager.py
+│   ├── test_authentication.py
+│   ├── test_reporters.py
+│   └── test_benchmarks.py      # Performance benchmarks
+│
+├── docs/                       # Documentation
+│   └── site/                   # Static HTML documentation site
+│
+├── setup.py                    # Python package setup
+├── Makefile                    # Build targets
+└── README.md</code></pre>
+
+      <h3>Key Directory Descriptions</h3>
+      <ul>
+        <li><strong><code>src/</code></strong> — All C code. Changes here require a <code>make build</code> to take effect.</li>
+        <li><strong><code>loadspiker/</code></strong> — Python package. Changes here are effective immediately when installed in editable mode (<code>pip install -e .</code>).</li>
+        <li><strong><code>tests/</code></strong> — Test suite. All tests use pytest. Protocol tests that require unavailable C bindings use <code>@pytest.mark.skipif</code>.</li>
+        <li><strong><code>docs/site/</code></strong> — Static HTML documentation. Edit the HTML files directly — no static site generator is required.</li>
+      </ul>
+
+      <!-- ===================== WORKFLOW ===================== -->
+      <h2 id="workflow">Development Workflow</h2>
+
+      <h3>Building and Testing</h3>
+      <pre><code class="language-bash"># Clean rebuild
+make clean && make build
+
+# Install in editable mode
+make install
+# or:
+pip install -e .
+
+# Run the full test suite
+make test
+# or:
+python3 -m pytest tests/ -v
+
+# Run a specific test file
+python3 -m pytest tests/test_engine.py -v
+
+# Run tests matching a keyword
+python3 -m pytest tests/ -k "session" -v</code></pre>
+
+      <h3>Debug Builds</h3>
+      <pre><code class="language-bash"># Build with debug symbols (-O0 -g)
+make debug
+
+# AddressSanitizer build (Linux)
+CFLAGS="-fsanitize=address -g" LDFLAGS="-fsanitize=address" make build
+
+# Run tests with AddressSanitizer
+make test-asan
+
+# Valgrind (Linux only)
+valgrind --leak-check=full --error-exitcode=1 \
+  python3 -m pytest tests/test_engine.py -v</code></pre>
+
+      <h3>Environment Variables</h3>
+      <table>
+        <thead><tr><th>Variable</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>LOADSPIKER_DEBUG=1</code></td><td>Enable C-level debug logging to stderr during build and runtime</td></tr>
+          <tr><td><code>LOADSPIKER_VERBOSE=1</code></td><td>Enable verbose libcurl and connection pool logging</td></tr>
+          <tr><td><code>CFLAGS</code></td><td>Extra C compiler flags passed through to the build</td></tr>
+          <tr><td><code>LDFLAGS</code></td><td>Extra linker flags passed through to the build</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ===================== CODE STYLE ===================== -->
+      <h2 id="code-style">Code Style Guidelines</h2>
+
+      <h3>C Code Style</h3>
+      <ul>
+        <li>4-space indentation, no tabs</li>
+        <li>Doxygen-style comments on all public functions</li>
+        <li>Always check <code>malloc</code>/<code>calloc</code> return values for NULL</li>
+        <li>Use <code>const</code> for pointer parameters that are not modified</li>
+        <li>Use <code>strncpy</code> and <code>snprintf</code> — never <code>strcpy</code> or <code>sprintf</code></li>
+        <li>Zero-initialize buffers before copying into them</li>
+        <li>Opening brace on the same line as the function signature (K&amp;R style)</li>
+      </ul>
+
+      <pre><code class="language-c">/**
+ * @brief Connect to an MQTT broker.
+ *
+ * @param engine     Pointer to the engine instance.
+ * @param host       Broker hostname or IP address.
+ * @param port       Broker port number (typically 1883).
+ * @param client_id  Unique client identifier string.
+ * @return           Connection ID >= 0 on success, -1 on error.
+ */
+int mqtt_connect(engine_t *engine,
+                 const char *host,
+                 int port,
+                 const char *client_id) {
+    if (!engine || !host || !client_id) {
+        return -1;
+    }
+
+    char safe_host[MAX_HOSTNAME_LENGTH];
+    memset(safe_host, 0, sizeof(safe_host));
+    strncpy(safe_host, host, sizeof(safe_host) - 1);
+
+    mqtt_connection_t *conn = calloc(1, sizeof(mqtt_connection_t));
+    if (!conn) {
+        return -1;  // Allocation failure
+    }
+
+    // ... implementation
+    return conn->id;
+}</code></pre>
+
+      <h3>Python Code Style</h3>
+      <ul>
+        <li>Follow PEP 8 — use <code>flake8</code> or <code>ruff</code> to check</li>
+        <li>Add type hints to all public function signatures</li>
+        <li>Write docstrings for all public classes and methods (Google or NumPy style)</li>
+        <li>Use <code>f-strings</code> for string formatting</li>
+        <li>Maximum line length: 100 characters</li>
+        <li>Sort imports: stdlib, then third-party, then local (isort)</li>
+      </ul>
+
+      <pre><code class="language-python">from typing import Optional, Dict, List
+
+
+class SessionStore:
+    """Thread-safe key-value store for a single virtual user's session state.
+
+    Args:
+        user_id: Unique identifier for this user's session.
+    """
+
+    def __init__(self, user_id: str) -> None:
+        self.user_id = user_id
+        self._data: Dict[str, object] = {}
+        self._cookies: Dict[str, str] = {}
+
+    def set(self, key: str, value: object) -> None:
+        """Store a value under the given key.
+
+        Args:
+            key:   The storage key.
+            value: The value to store (any serializable type).
+        """
+        self._data[key] = value
+
+    def get(self, key: str, default: Optional[object] = None) -> Optional[object]:
+        """Retrieve a stored value.
+
+        Args:
+            key:     The storage key.
+            default: Value to return if the key does not exist.
+
+        Returns:
+            The stored value, or default if not found.
+        """
+        return self._data.get(key, default)</code></pre>
+
+      <!-- ===================== TESTING ===================== -->
+      <h2 id="testing">Testing Guidelines</h2>
+
+      <h3>Test File Inventory</h3>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Coverage</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>test_engine.py</code></td><td>Engine, HTTP requests, run_scenario, metrics</td><td>Core integration tests</td></tr>
+          <tr><td><code>test_scenario.py</code></td><td>Scenario, RESTAPIScenario, WebsiteScenario, data loading</td><td>Unit tests</td></tr>
+          <tr><td><code>test_assertions.py</code></td><td>All response assertion functions, AssertionGroup, run_assertions</td><td>Unit tests, no network</td></tr>
+          <tr><td><code>test_performance_assertions.py</code></td><td>All performance assertion functions, run_performance_assertions</td><td>Unit tests</td></tr>
+          <tr><td><code>test_session_manager.py</code></td><td>SessionStore, SessionManager, cookie handling, token storage, extraction rules</td><td>Unit tests</td></tr>
+          <tr><td><code>test_authentication.py</code></td><td>All authentication flow factories and AuthenticationManager methods</td><td>Unit tests with mock engine</td></tr>
+          <tr><td><code>test_reporters.py</code></td><td>ConsoleReporter, JSONReporter, HTMLReporter, MultiReporter</td><td>Output format tests</td></tr>
+          <tr><td><code>test_benchmarks.py</code></td><td>Throughput benchmarks: small/medium/large scenarios</td><td>Performance tests, may be slow</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Unit Tests</h3>
+      <p>Unit tests should be fast (under 100ms each), require no network access, and mock external dependencies. Place them in <code>tests/test_*.py</code> files. Use pytest fixtures for shared setup.</p>
+      <pre><code class="language-python">import pytest
+from loadspiker.assertions import status_is, body_contains, run_assertions
+
+
+@pytest.fixture
+def sample_response():
+    return {
+        'status_code': 200,
+        'body': '{"id": 1, "name": "Alice"}',
+        'headers': {'Content-Type': 'application/json'},
+        'response_time_ms': 42.0,
+        'error': None,
+    }
+
+
+def test_status_is_pass(sample_response):
+    assertion = status_is(200)
+    passed, message = assertion(sample_response)
+    assert passed
+
+
+def test_status_is_fail(sample_response):
+    assertion = status_is(404)
+    passed, message = assertion(sample_response)
+    assert not passed
+    assert "200" in message</code></pre>
+
+      <h3>Integration Tests</h3>
+      <p>Integration tests interact with the C engine and may make real network requests. Mark tests that require network access with <code>@pytest.mark.integration</code>. Use <code>pytest -m "not integration"</code> to run only unit tests in CI.</p>
+
+      <h3>Performance Tests</h3>
+      <p>Performance tests live in <code>test_benchmarks.py</code> and should assert minimum throughput thresholds. These are slow and should only run in dedicated benchmark jobs, not in regular CI.</p>
+      <pre><code class="language-bash"># Run all tests except benchmarks
+python3 -m pytest tests/ -v --ignore=tests/test_benchmarks.py
+
+# Run only benchmarks
+python3 -m pytest tests/test_benchmarks.py -v
+
+# Run with ASan
+make test-asan
+
+# Run all test types
+make test-all</code></pre>
+
+      <!-- ===================== PROCESS ===================== -->
+      <h2 id="process">Contributing Process</h2>
+
+      <ol>
+        <li><strong>Check issues:</strong> Search the <a href="https://github.com/loadspiker/loadspiker/issues">GitHub Issues</a> page to see if your intended change is already being discussed. Comment on an existing issue or open a new one before starting significant work.</li>
+        <li><strong>Fork the repository:</strong> Click "Fork" on GitHub and clone your fork locally.</li>
+        <li><strong>Create a branch:</strong> Branch off <code>main</code> with a descriptive name.
+          <pre><code class="language-bash">git checkout -b feature/tcp-python-bindings
+# or
+git checkout -b fix/mqtt-memory-leak</code></pre>
+        </li>
+        <li><strong>Make your changes:</strong> Write code following the style guidelines above. Keep commits focused — one logical change per commit.</li>
+        <li><strong>Add or update tests:</strong> All new functionality must have corresponding tests. Bug fixes should include a regression test.</li>
+        <li><strong>Open a pull request:</strong> Push your branch and open a PR against <code>main</code>. Fill in the PR template, describing what changed and why.</li>
+      </ol>
+
+      <!-- ===================== CHECKLIST ===================== -->
+      <h2 id="checklist">PR Checklist</h2>
+
+      <p>Before submitting your pull request, confirm all of the following:</p>
+
+      <ul class="checklist">
+        <li>Code follows the C and Python style guidelines described above</li>
+        <li>All existing tests pass: <code>make test</code></li>
+        <li>New or changed functionality has test coverage</li>
+        <li>Memory is checked with ASan or Valgrind for C changes: <code>make test-asan</code></li>
+        <li>Documentation is updated if the public API changed</li>
+        <li>No compiler warnings: build with <code>-Wall -Wextra</code> and fix all warnings</li>
+        <li>Thread safety is maintained — all shared state is protected by appropriate mutexes</li>
+        <li>Error handling is present — all C functions return errors, Python raises exceptions</li>
+        <li>Input validation is performed before use — null pointers, empty strings, out-of-range values</li>
+        <li>No hardcoded secrets, credentials, or environment-specific paths in the code</li>
+      </ul>
+
+      <!-- ===================== MEMORY SAFETY ===================== -->
+      <h2 id="security">Memory Safety (Critical for C Code)</h2>
+
+      <p>LoadSpiker's C engine is security-sensitive. Pay particular attention to the following classes of vulnerabilities in any C code you write or modify:</p>
+
+      <ul>
+        <li>
+          <strong>Buffer overflows:</strong> Always use <code>strncpy(dest, src, sizeof(dest) - 1)</code>. Always zero-initialize destination buffers with <code>memset</code> before writing. Never use <code>strcpy</code>, <code>strcat</code>, <code>sprintf</code>, or <code>gets</code>.
+        </li>
+        <li>
+          <strong>Null pointer dereferences:</strong> Validate all pointer arguments at the top of every function. Return an error code immediately if a required pointer is NULL.
+        </li>
+        <li>
+          <strong>Memory leaks:</strong> Every <code>malloc</code>/<code>calloc</code> must have a corresponding <code>free</code> on every code path — including error paths. Use the <code>*_cleanup_all()</code> pattern for connection tables.
+        </li>
+        <li>
+          <strong>Use-after-free:</strong> Set pointers to NULL immediately after calling <code>free()</code>. Never access memory through a pointer after the object it points to has been destroyed.
+        </li>
+        <li>
+          <strong>Thread safety:</strong> Acquire the appropriate mutex before reading or writing any shared state. Use atomic operations for simple counters where a mutex would be too expensive. Document which mutex protects which data structure.
+        </li>
+      </ul>
+
+      <div class="callout info">
+        <strong>Tip:</strong> Run <code>make test-asan</code> before submitting any C code change. AddressSanitizer catches buffer overflows, use-after-free, and double-free errors at runtime. A clean ASan run is required for C code PRs.
+      </div>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#setup">Development Setup</a>
+      <a href="#structure">Project Structure</a>
+      <a href="#workflow">Development Workflow</a>
+      <a href="#code-style">Code Style</a>
+      <a href="#testing">Testing Guidelines</a>
+      <a href="#process">Contributing Process</a>
+      <a href="#checklist">PR Checklist</a>
+      <a href="#security">Memory Safety</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

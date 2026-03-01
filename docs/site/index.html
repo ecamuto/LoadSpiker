@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <style>
+    /* ── Homepage-only overrides ───────────────────────── */
+
+    /* Remove the default .content max-width so sections can go full-width */
+    .home-wrapper {
+      flex: 1;
+      min-width: 0;
+      overflow-x: hidden;
+    }
+
+    /* ── Hero ─────────────────────────────────────────── */
+    .home-hero {
+      position: relative;
+      overflow: hidden;
+      padding: 88px 64px 72px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background:
+        radial-gradient(ellipse at 15% 60%, rgba(56,189,248,.13) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 20%, rgba(192,132,252,.11) 0%, transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(56,189,248,.06) 0%, transparent 50%);
+    }
+    /* subtle dot grid */
+    .home-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+    [data-theme="light"] .home-hero::before {
+      background-image: radial-gradient(circle, rgba(0,0,0,.06) 1px, transparent 1px);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(56,189,248,.35);
+      color: var(--accent);
+      border-radius: 20px;
+      padding: 5px 16px;
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      margin-bottom: 24px;
+    }
+
+    .home-hero h1 {
+      font-size: clamp(2.8rem, 6vw, 4.5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -.03em;
+      background: linear-gradient(135deg, #e2e8f0 20%, #38bdf8 55%, #c084fc 85%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 20px;
+    }
+    [data-theme="light"] .home-hero h1 {
+      background: linear-gradient(135deg, #1e293b 20%, #0284c7 55%, #7c3aed 85%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .hero-tagline {
+      font-size: clamp(1rem, 2vw, 1.15rem);
+      color: var(--text-muted);
+      max-width: 580px;
+      margin: 0 auto 36px;
+      line-height: 1.65;
+    }
+
+    .hero-ctas {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .btn-hero-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: var(--radius);
+      font-size: .95rem;
+      font-weight: 700;
+      transition: background .2s, transform .2s, box-shadow .2s;
+      box-shadow: 0 0 0 0 rgba(56,189,248,0);
+    }
+    .btn-hero-primary:hover {
+      background: #0ea5e9;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(56,189,248,.3);
+      text-decoration: none;
+      color: #fff;
+    }
+    .btn-hero-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius);
+      font-size: .95rem;
+      font-weight: 600;
+      backdrop-filter: blur(4px);
+      transition: border-color .2s, color .2s, background .2s;
+    }
+    .btn-hero-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-glow);
+      text-decoration: none;
+    }
+
+    /* Stats strip */
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      flex-wrap: wrap;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 640px;
+      margin: 0 auto;
+      overflow: hidden;
+      background: rgba(255,255,255,.025);
+      backdrop-filter: blur(6px);
+    }
+    [data-theme="light"] .hero-stats { background: rgba(255,255,255,.7); }
+    .hero-stat {
+      flex: 1;
+      min-width: 120px;
+      padding: 18px 20px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .hero-stat:last-child { border-right: none; }
+    .stat-num {
+      display: block;
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1.1;
+      letter-spacing: -.02em;
+    }
+    .stat-label {
+      display: block;
+      font-size: .74rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+      letter-spacing: .02em;
+    }
+
+    /* ── Section wrapper ─────────────────────────────── */
+    .home-section {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 64px 48px;
+    }
+    .home-section + .home-section {
+      border-top: 1px solid var(--border);
+    }
+    @media (max-width: 768px) {
+      .home-section { padding: 40px 24px; }
+      .home-hero { padding: 60px 24px 56px; }
+    }
+
+    .section-eyebrow {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    .section-sub {
+      color: var(--text-muted);
+      font-size: .95rem;
+      margin-bottom: 40px;
+      max-width: 540px;
+    }
+
+    /* ── Feature Grid ────────────────────────────────── */
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 1100px) { .feat-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px)  { .feat-grid { grid-template-columns: 1fr; } }
+
+    .feat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 22px;
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+    }
+    .feat-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 32px rgba(56,189,248,.08);
+    }
+    .feat-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+      margin-bottom: 14px;
+      display: block;
+    }
+    .feat-card h3 {
+      font-size: .95rem;
+      font-weight: 700;
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+    .feat-card p {
+      font-size: .82rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* ── Quick Start ─────────────────────────────────── */
+    .quickstart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+    }
+    @media (max-width: 860px) { .quickstart-grid { grid-template-columns: 1fr; } }
+
+    .quickstart-left h2 { margin-top: 0; }
+    .quickstart-steps { margin: 24px 0 0; }
+    .qs-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .qs-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: .8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .qs-step-body h4 { font-size: .9rem; font-weight: 600; margin: 0 0 4px; }
+    .qs-step-body p  { font-size: .82rem; color: var(--text-muted); margin: 0; }
+
+    .quickstart-right pre {
+      margin: 0;
+      border-radius: 10px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.35);
+    }
+    .quickstart-right pre code { font-size: .82rem; }
+
+    /* ── Comparison ──────────────────────────────────── */
+    .compare-section .table-wrap { border-radius: 10px; }
+    .compare-section thead th:first-child { min-width: 160px; }
+    .compare-section td { vertical-align: middle; }
+
+    /* ── CTA Banner ──────────────────────────────────── */
+    .cta-banner {
+      background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(192,132,252,.1));
+      border: 1px solid rgba(56,189,248,.2);
+      border-radius: 16px;
+      padding: 48px 40px;
+      text-align: center;
+    }
+    .cta-banner h2 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      margin: 0 0 12px;
+      color: var(--text);
+    }
+    .cta-banner p {
+      color: var(--text-muted);
+      margin: 0 0 28px;
+      font-size: .95rem;
+    }
+    .cta-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html" class="active"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="home-wrapper">
+
+      <!-- ── Hero ────────────────────────────────────── -->
+      <section class="home-hero">
+        <div class="hero-badge">⚡ Open Source · MIT License</div>
+        <h1>LoadSpiker</h1>
+        <p class="hero-tagline">
+          High-performance load testing powered by a C engine with a Python scripting interface.
+          10,000+ req/s. Six protocols. Zero XML.
+        </p>
+        <div class="hero-ctas">
+          <a href="getting-started.html" class="btn-hero-primary">Get Started →</a>
+          <a href="api-reference.html" class="btn-hero-secondary">API Reference</a>
+          <a href="https://github.com/loadspiker/loadspiker" class="btn-hero-secondary">★ GitHub</a>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="stat-num">10k+</span>
+            <span class="stat-label">requests / sec</span>
+          </div>
+          <div class="hero-stat">
+            <span class="stat-num">6</span>
+            <span class="stat-label">protocols</span>
+          </div>
+          <div class="hero-stat">
+            <span class="stat-num">Python</span>
+            <span class="stat-label">scripting API</span>
+          </div>
+          <div class="hero-stat">
+            <span class="stat-num">MIT</span>
+            <span class="stat-label">open source</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Features ────────────────────────────────── -->
+      <section class="home-section">
+        <div class="section-eyebrow">What's included</div>
+        <h2 class="section-title">Everything you need to load test</h2>
+        <p class="section-sub">From a simple URL smoke-test to a full multi-protocol distributed scenario — one tool, one API.</p>
+
+        <div class="feat-grid">
+          <div class="feat-card">
+            <span class="feat-icon">⚡</span>
+            <h3>High Performance</h3>
+            <p>C-based engine delivers 10,000+ requests per second with minimal overhead and efficient connection pooling.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">🐍</span>
+            <h3>Python Scripting</h3>
+            <p>Write tests in familiar Python. No XML, no Scala DSL, no GUI — just clean, readable code.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">🔌</span>
+            <h3>Multi-Protocol</h3>
+            <p>HTTP/HTTPS, WebSocket, TCP, UDP, MQTT, and Database connections from a single unified API.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">🔐</span>
+            <h3>Session Management</h3>
+            <p>Thread-safe session storage with automatic cookie handling, token extraction, and request correlation.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">🔑</span>
+            <h3>Authentication</h3>
+            <p>Basic Auth, Bearer tokens, API Keys, Form-based login, and OAuth 2.0 — all first-class.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">📊</span>
+            <h3>Real-time Metrics</h3>
+            <p>Live RPS, response time percentiles, error rates, and throughput data during test execution.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">✅</span>
+            <h3>Advanced Assertions</h3>
+            <p>Validate status codes, JSON paths, regex patterns, headers, and response times inline.</p>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">📁</span>
+            <h3>Data-Driven</h3>
+            <p>CSV data source with sequential, random, and round-robin strategies for realistic parameterised tests.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Quick Start ──────────────────────────────── -->
+      <section class="home-section">
+        <div class="quickstart-grid">
+          <div class="quickstart-left">
+            <div class="section-eyebrow">Quick Start</div>
+            <h2 class="section-title">Up and running in minutes</h2>
+            <p class="section-sub">Install, write a scenario in Python, run — that's it.</p>
+
+            <div class="quickstart-steps">
+              <div class="qs-step">
+                <div class="qs-num">1</div>
+                <div class="qs-step-body">
+                  <h4>Install dependencies</h4>
+                  <p>libcurl, Python 3.7+, GCC / Clang and Make.</p>
+                </div>
+              </div>
+              <div class="qs-step">
+                <div class="qs-num">2</div>
+                <div class="qs-step-body">
+                  <h4>Build the C extension</h4>
+                  <p><code>make install-deps &amp;&amp; make install</code></p>
+                </div>
+              </div>
+              <div class="qs-step">
+                <div class="qs-num">3</div>
+                <div class="qs-step-body">
+                  <h4>Write your scenario</h4>
+                  <p>Create an <code>Engine</code>, add requests, call <code>run_scenario()</code>.</p>
+                </div>
+              </div>
+              <div class="qs-step">
+                <div class="qs-num">4</div>
+                <div class="qs-step-body">
+                  <h4>Read the results</h4>
+                  <p>RPS, avg response time, error rate — all in the returned dict.</p>
+                </div>
+              </div>
+            </div>
+
+            <a href="getting-started.html" class="btn btn-primary" style="margin-top:8px">Full Installation Guide →</a>
+          </div>
+
+          <div class="quickstart-right">
+<pre><code class="language-python">from loadspiker import Engine, Scenario
+
+# Create engine
+engine = Engine(max_connections=100, worker_threads=4)
+
+# Define scenario
+scenario = Scenario("My Load Test")
+scenario.get("https://httpbin.org/get")
+scenario.post(
+    "https://httpbin.org/post",
+    body='{"user": "test"}',
+    headers={"Content-Type": "application/json"}
+)
+
+# Run with 10 virtual users for 60 seconds
+results = engine.run_scenario(
+    scenario,
+    users=10,
+    duration=60
+)
+
+print(f"RPS:          {results['requests_per_second']:.1f}")
+print(f"Avg response: {results['avg_response_time_ms']:.1f} ms")
+print(f"Success rate: {results['successful_requests'] /
+                       results['total_requests'] * 100:.1f}%")</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Comparison ───────────────────────────────── -->
+      <section class="home-section compare-section">
+        <div class="section-eyebrow">Comparison</div>
+        <h2 class="section-title">How LoadSpiker stacks up</h2>
+        <p class="section-sub">C performance, Python simplicity — no JVM, no XML, no GUI required.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>LoadSpiker</th>
+                <th>Gatling</th>
+                <th>JMeter</th>
+                <th>Artillery</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Peak Throughput</td>
+                <td><span class="badge badge-green">10,000+ req/s</span></td>
+                <td><span class="badge badge-green">High</span></td>
+                <td><span class="badge badge-yellow">Medium</span></td>
+                <td><span class="badge badge-yellow">Medium</span></td>
+              </tr>
+              <tr>
+                <td>Scripting Language</td>
+                <td><span class="badge badge-blue">Python</span></td>
+                <td><span class="badge badge-purple">Scala</span></td>
+                <td><span class="badge badge-yellow">Java / XML</span></td>
+                <td><span class="badge badge-blue">YAML / JS</span></td>
+              </tr>
+              <tr>
+                <td>Resource Usage</td>
+                <td><span class="badge badge-green">Very Low (C)</span></td>
+                <td><span class="badge badge-yellow">Medium (JVM)</span></td>
+                <td><span class="badge badge-red">High (JVM)</span></td>
+                <td><span class="badge badge-yellow">Medium (Node)</span></td>
+              </tr>
+              <tr>
+                <td>Multi-Protocol</td>
+                <td><span class="check">✓</span> 6 protocols</td>
+                <td><span class="partial">~</span> HTTP + WS</td>
+                <td><span class="check">✓</span> Many (plugins)</td>
+                <td><span class="partial">~</span> HTTP + WS</td>
+              </tr>
+              <tr>
+                <td>Real-time Metrics</td>
+                <td><span class="check">✓</span></td>
+                <td><span class="check">✓</span></td>
+                <td><span class="partial">~</span></td>
+                <td><span class="check">✓</span></td>
+              </tr>
+              <tr>
+                <td>HTML Reports</td>
+                <td><span class="check">✓</span></td>
+                <td><span class="check">✓</span></td>
+                <td><span class="check">✓</span></td>
+                <td><span class="partial">~</span></td>
+              </tr>
+              <tr>
+                <td>Session Management</td>
+                <td><span class="check">✓</span> Built-in</td>
+                <td><span class="check">✓</span></td>
+                <td><span class="check">✓</span></td>
+                <td><span class="partial">~</span> Limited</td>
+              </tr>
+              <tr>
+                <td>Learning Curve</td>
+                <td><span class="badge badge-green">Easy</span></td>
+                <td><span class="badge badge-yellow">Medium</span></td>
+                <td><span class="badge badge-red">Steep</span></td>
+                <td><span class="badge badge-green">Easy</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── CTA Banner ───────────────────────────────── -->
+      <section class="home-section">
+        <div class="cta-banner">
+          <h2>Ready to start testing?</h2>
+          <p>Get LoadSpiker running locally in under five minutes.</p>
+          <div class="cta-actions">
+            <a href="getting-started.html" class="btn-hero-primary">Get Started →</a>
+            <a href="api-reference.html" class="btn btn-secondary">Browse the API</a>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /.home-wrapper -->
+  </div><!-- /.main-content -->
+
+</div><!-- /.layout -->
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button id="back-to-top" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

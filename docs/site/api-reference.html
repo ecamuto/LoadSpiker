@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Reference — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html" class="active"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>API Reference</h1>
+      <p class="page-lead">Complete reference for all LoadSpiker Python classes and methods.</p>
+
+      <!-- ===================== ENGINE ===================== -->
+      <h2 id="engine">Engine</h2>
+      <p>The core engine class that manages the C-based connection pool and worker thread pool. Import from <code>loadspiker</code>.</p>
+
+      <div class="method-sig">
+        <code>Engine(max_connections=100, worker_threads=4, timeout_ms=30000, verbose=False)</code>
+      </div>
+
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>max_connections</code></td><td>int</td><td>100</td><td>Maximum concurrent connections in the pool</td></tr>
+          <tr><td><code>worker_threads</code></td><td>int</td><td>4</td><td>Number of worker threads for request processing</td></tr>
+          <tr><td><code>timeout_ms</code></td><td>int</td><td>30000</td><td>Default request timeout in milliseconds</td></tr>
+          <tr><td><code>verbose</code></td><td>bool</td><td>False</td><td>Enable verbose logging from the C engine</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="execute-request">execute_request()</h3>
+      <div class="method-sig">
+        <code>engine.execute_request(url, method="GET", headers=None, body=None, timeout_ms=None)</code>
+      </div>
+      <p>Execute a single HTTP request and return the response.</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>url</code></td><td>str</td><td>Target URL (must include protocol)</td></tr>
+          <tr><td><code>method</code></td><td>str</td><td>HTTP method: GET, POST, PUT, DELETE, PATCH, HEAD</td></tr>
+          <tr><td><code>headers</code></td><td>dict</td><td>Optional request headers as key-value pairs</td></tr>
+          <tr><td><code>body</code></td><td>str</td><td>Optional request body string</td></tr>
+          <tr><td><code>timeout_ms</code></td><td>int</td><td>Override the engine's default timeout</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Returns:</strong> dict with keys <code>status_code</code>, <code>body</code>, <code>headers</code>, <code>response_time_ms</code>, <code>error</code></p>
+      <pre><code class="language-python">response = engine.execute_request(
+    "https://api.example.com/users/1",
+    method="GET",
+    headers={"Authorization": "Bearer my-token"}
+)
+print(response['status_code'])     # 200
+print(response['response_time_ms']) # 142.3</code></pre>
+
+      <h3 id="run-scenario">run_scenario()</h3>
+      <div class="method-sig">
+        <code>engine.run_scenario(scenario, users=1, duration=60, ramp_up=0)</code>
+      </div>
+      <p>Run a scenario with the specified load parameters. Releases the Python GIL during execution for true concurrency.</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>scenario</code></td><td>Scenario</td><td>The scenario object to execute</td></tr>
+          <tr><td><code>users</code></td><td>int</td><td>Number of concurrent virtual users</td></tr>
+          <tr><td><code>duration</code></td><td>int</td><td>Test duration in seconds</td></tr>
+          <tr><td><code>ramp_up</code></td><td>int</td><td>Seconds to linearly ramp up to full user count</td></tr>
+        </tbody>
+      </table>
+      <pre><code class="language-python">results = engine.run_scenario(
+    scenario,
+    users=100,
+    duration=120,
+    ramp_up=30
+)
+print(f"RPS: {results['requests_per_second']:.2f}")
+print(f"Error rate: {results['error_rate']:.2%}")</code></pre>
+
+      <h3 id="get-metrics">get_metrics()</h3>
+      <div class="method-sig">
+        <code>engine.get_metrics()</code>
+      </div>
+      <p>Retrieve the current accumulated metrics from the engine. Can be called mid-test for live monitoring.</p>
+      <table>
+        <thead><tr><th>Key</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>total_requests</code></td><td>int</td><td>Total number of requests made</td></tr>
+          <tr><td><code>successful_requests</code></td><td>int</td><td>Requests with 2xx status codes</td></tr>
+          <tr><td><code>failed_requests</code></td><td>int</td><td>Requests with non-2xx or errors</td></tr>
+          <tr><td><code>requests_per_second</code></td><td>float</td><td>Throughput over the test window</td></tr>
+          <tr><td><code>avg_response_time_ms</code></td><td>float</td><td>Mean response time in milliseconds</td></tr>
+          <tr><td><code>min_response_time_ms</code></td><td>float</td><td>Minimum observed response time</td></tr>
+          <tr><td><code>max_response_time_ms</code></td><td>float</td><td>Maximum observed response time</td></tr>
+          <tr><td><code>total_bytes_transferred</code></td><td>int</td><td>Total bytes sent and received</td></tr>
+          <tr><td><code>error_rate</code></td><td>float</td><td>Fraction of failed requests (0.0–1.0)</td></tr>
+          <tr><td><code>active_connections</code></td><td>int</td><td>Current open connections</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="reset-metrics">reset_metrics()</h3>
+      <div class="method-sig">
+        <code>engine.reset_metrics()</code>
+      </div>
+      <p>Reset all accumulated metrics counters to zero. Useful for baseline measurements or between test phases.</p>
+      <pre><code class="language-python"># Warm-up phase
+engine.run_scenario(warmup_scenario, users=5, duration=10)
+engine.reset_metrics()
+
+# Actual measurement phase
+results = engine.run_scenario(main_scenario, users=100, duration=60)</code></pre>
+
+      <h3 id="database-methods">Database Methods</h3>
+
+      <div class="method-sig"><code>engine.database_connect(connection_string, pool_size=10)</code></div>
+      <p>Create a simulated database connection pool. Returns a connection ID string.</p>
+      <pre><code class="language-python">conn_id = engine.database_connect("mysql://user:pass@localhost/mydb", pool_size=20)</code></pre>
+
+      <div class="method-sig"><code>engine.database_query(connection_id, query, params=None)</code></div>
+      <p>Execute a query against the simulated connection pool. Returns a response dict with <code>status_code</code>, <code>body</code>, and <code>response_time_ms</code>.</p>
+      <pre><code class="language-python">result = engine.database_query(conn_id, "SELECT * FROM users WHERE id = ?", [42])</code></pre>
+
+      <div class="method-sig"><code>engine.database_disconnect(connection_id)</code></div>
+      <p>Release all connections in the pool and free associated resources.</p>
+
+      <h3 id="websocket-methods">WebSocket Methods</h3>
+
+      <div class="method-sig"><code>engine.websocket_connect(url, headers=None)</code></div>
+      <p>Initiate a WebSocket connection (simulated in Phase 1). Returns a connection ID string.</p>
+
+      <div class="method-sig"><code>engine.websocket_send(connection_id, message)</code></div>
+      <p>Send a message over the WebSocket connection.</p>
+
+      <div class="method-sig"><code>engine.websocket_close(connection_id)</code></div>
+      <p>Close the WebSocket connection and release resources.</p>
+
+      <pre><code class="language-python">ws_id = engine.websocket_connect("wss://echo.example.com/ws")
+engine.websocket_send(ws_id, '{"type": "ping"}')
+engine.websocket_close(ws_id)</code></pre>
+
+      <h3 id="mqtt-methods">MQTT Methods</h3>
+
+      <div class="method-sig"><code>engine.mqtt_connect(broker_host, broker_port=1883, client_id=None, username=None, password=None, keepalive=60)</code></div>
+      <p>Connect to an MQTT broker. Returns a connection ID string.</p>
+
+      <div class="method-sig"><code>engine.mqtt_publish(connection_id, topic, payload, qos=0, retain=False)</code></div>
+      <p>Publish a message to a topic.</p>
+
+      <div class="method-sig"><code>engine.mqtt_subscribe(connection_id, topic, qos=0)</code></div>
+      <p>Subscribe to a topic pattern.</p>
+
+      <div class="method-sig"><code>engine.mqtt_disconnect(connection_id)</code></div>
+      <p>Disconnect from the MQTT broker.</p>
+
+      <pre><code class="language-python">mqtt_id = engine.mqtt_connect("mqtt.example.com", 1883,
+                               client_id="loadspiker-1",
+                               username="user", password="secret")
+engine.mqtt_publish(mqtt_id, "sensors/temperature", "23.5", qos=1)
+engine.mqtt_subscribe(mqtt_id, "alerts/#", qos=0)
+engine.mqtt_disconnect(mqtt_id)</code></pre>
+
+      <h3 id="tcp-methods">TCP Methods</h3>
+
+      <div class="method-sig"><code>engine.tcp_connect(host, port, timeout_ms=None)</code></div>
+      <p>Open a raw TCP connection. Returns a connection ID string.</p>
+
+      <div class="method-sig"><code>engine.tcp_send(connection_id, data)</code></div>
+      <p>Send raw bytes or a string over the TCP connection.</p>
+
+      <div class="method-sig"><code>engine.tcp_receive(connection_id, buffer_size=4096)</code></div>
+      <p>Receive data from the TCP connection. Returns received bytes.</p>
+
+      <div class="method-sig"><code>engine.tcp_disconnect(connection_id)</code></div>
+      <p>Close the TCP connection.</p>
+
+      <pre><code class="language-python">tcp_id = engine.tcp_connect("tcp.example.com", 9000)
+engine.tcp_send(tcp_id, "HELLO\r\n")
+data = engine.tcp_receive(tcp_id)
+engine.tcp_disconnect(tcp_id)</code></pre>
+
+      <h3 id="udp-methods">UDP Methods</h3>
+
+      <div class="method-sig"><code>engine.udp_create_endpoint(local_port=0)</code></div>
+      <p>Create a UDP endpoint bound to a local port (0 = OS-assigned). Returns an endpoint ID string.</p>
+
+      <div class="method-sig"><code>engine.udp_send(endpoint_id, host, port, data)</code></div>
+      <p>Send a UDP datagram to the specified host and port.</p>
+
+      <div class="method-sig"><code>engine.udp_receive(endpoint_id, buffer_size=4096, timeout_ms=1000)</code></div>
+      <p>Receive a UDP datagram. Returns a dict with <code>data</code>, <code>source_host</code>, <code>source_port</code>.</p>
+
+      <div class="method-sig"><code>engine.udp_close_endpoint(endpoint_id)</code></div>
+      <p>Close the UDP endpoint and release the socket.</p>
+
+      <pre><code class="language-python">ep_id = engine.udp_create_endpoint()
+engine.udp_send(ep_id, "udp.example.com", 5005, "PING")
+response = engine.udp_receive(ep_id, timeout_ms=500)
+print(response['data'])
+engine.udp_close_endpoint(ep_id)</code></pre>
+
+      <!-- ===================== SCENARIO ===================== -->
+      <h2 id="scenario">Scenario</h2>
+      <p>A <code>Scenario</code> is a collection of requests that virtual users execute sequentially. Import from <code>loadspiker</code>.</p>
+
+      <div class="method-sig"><code>Scenario(name, base_url=None)</code></div>
+
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>str</td><td>Human-readable name for this scenario</td></tr>
+          <tr><td><code>base_url</code></td><td>str</td><td>Optional base URL prepended to all relative request paths</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Core Methods</h3>
+
+      <div class="method-sig"><code>scenario.get(url, headers=None, timeout_ms=None)</code></div>
+      <p>Add a GET request to the scenario.</p>
+
+      <div class="method-sig"><code>scenario.post(url, body=None, headers=None, timeout_ms=None)</code></div>
+      <p>Add a POST request to the scenario.</p>
+
+      <div class="method-sig"><code>scenario.put(url, body=None, headers=None, timeout_ms=None)</code></div>
+      <p>Add a PUT request to the scenario.</p>
+
+      <div class="method-sig"><code>scenario.delete(url, headers=None, timeout_ms=None)</code></div>
+      <p>Add a DELETE request to the scenario.</p>
+
+      <div class="method-sig"><code>scenario.add_request(url, method="GET", headers=None, body=None, timeout_ms=None)</code></div>
+      <p>Generic method for adding any HTTP request.</p>
+
+      <div class="method-sig"><code>scenario.load_data_file(filepath, strategy="sequential")</code></div>
+      <p>Load CSV data for data-driven testing. Strategies: <code>"sequential"</code>, <code>"random"</code>, <code>"round_robin"</code>.</p>
+      <pre><code class="language-python">scenario = Scenario("API Test", base_url="https://api.example.com")
+scenario.load_data_file("users.csv", strategy="round_robin")
+scenario.get("/users/{user_id}")  # {user_id} replaced from CSV data
+scenario.post("/orders", body='{"product": "{product_id}", "qty": "{qty}"}')</code></pre>
+
+      <h3>RESTAPIScenario</h3>
+      <p>A <code>Scenario</code> subclass pre-configured for JSON REST APIs.</p>
+      <pre><code class="language-python">from loadspiker import RESTAPIScenario
+
+api = RESTAPIScenario("REST API Test", base_url="https://api.example.com")
+# Automatically sets Content-Type: application/json
+api.get("/users")
+api.post("/users", body='{"name": "Alice"}')
+api.put("/users/1", body='{"name": "Alice Updated"}')
+api.delete("/users/1")</code></pre>
+
+      <h3>WebsiteScenario</h3>
+      <p>A <code>Scenario</code> subclass simulating a user browsing a website.</p>
+      <pre><code class="language-python">from loadspiker import WebsiteScenario
+
+site = WebsiteScenario("Website Browse", base_url="https://www.example.com")
+site.visit("/")
+site.visit("/about")
+site.visit("/products")
+site.think_time(2.0)  # Simulate 2-second pause between pages
+site.visit("/contact")</code></pre>
+
+      <h3>MQTTScenario</h3>
+      <pre><code class="language-python">from loadspiker.scenarios import MQTTScenario
+
+mqtt_scenario = MQTTScenario("IoT Publish Test",
+                              broker_host="mqtt.example.com",
+                              broker_port=1883)
+mqtt_scenario.connect(client_id="sensor-{user_id}", username="iot", password="secret")
+mqtt_scenario.publish("sensors/{user_id}/temperature", payload="22.5", qos=0)
+mqtt_scenario.publish("sensors/{user_id}/humidity", payload="65", qos=1)
+mqtt_scenario.disconnect()</code></pre>
+
+      <!-- ===================== REPORTERS ===================== -->
+      <h2 id="reporters">Reporters</h2>
+      <p>Reporters format and output test results. Import from <code>loadspiker.reporters</code>.</p>
+
+      <h3>ConsoleReporter</h3>
+      <p>Prints a formatted summary table to stdout.</p>
+      <div class="method-sig"><code>ConsoleReporter(color=True, show_progress=True)</code></div>
+
+      <h3>JSONReporter</h3>
+      <p>Writes results as JSON to a file or stdout.</p>
+      <div class="method-sig"><code>JSONReporter(filepath=None, pretty=True)</code></div>
+
+      <h3>HTMLReporter</h3>
+      <p>Generates a self-contained HTML report with charts.</p>
+      <div class="method-sig"><code>HTMLReporter(filepath, title="Load Test Report")</code></div>
+
+      <h3>MultiReporter</h3>
+      <p>Combines multiple reporters, dispatching to each.</p>
+      <div class="method-sig"><code>MultiReporter(*reporters)</code></div>
+
+      <h3>Reporter Interface</h3>
+      <table>
+        <thead><tr><th>Method</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>start_reporting(scenario_name)</code></td><td>Called before the test begins</td></tr>
+          <tr><td><code>report_metrics(metrics)</code></td><td>Called periodically during the test with current metrics</td></tr>
+          <tr><td><code>end_reporting(final_results)</code></td><td>Called after the test completes with final aggregated results</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Complete Reporter Example</h3>
+      <pre><code class="language-python">from loadspiker import Engine, Scenario
+from loadspiker.reporters import ConsoleReporter, HTMLReporter, MultiReporter
+
+engine = Engine(max_connections=200, worker_threads=8)
+scenario = Scenario("Full Report Demo")
+scenario.get("https://httpbin.org/get")
+
+reporter = MultiReporter(
+    ConsoleReporter(color=True),
+    HTMLReporter("report.html", title="My Load Test"),
+)
+
+reporter.start_reporting("Full Report Demo")
+results = engine.run_scenario(scenario, users=50, duration=60)
+reporter.report_metrics(results)
+reporter.end_reporting(results)</code></pre>
+
+      <!-- ===================== UTILITIES ===================== -->
+      <h2 id="utilities">Utilities</h2>
+      <p>Helper functions for common load patterns. Import from <code>loadspiker.utils</code>.</p>
+
+      <div class="method-sig"><code>ramp_up(engine, scenario, start_users, end_users, ramp_duration, hold_duration=0)</code></div>
+      <p>Linearly increase load from <code>start_users</code> to <code>end_users</code> over <code>ramp_duration</code> seconds, then optionally hold.</p>
+      <pre><code class="language-python">from loadspiker.utils import ramp_up
+results = ramp_up(engine, scenario,
+                  start_users=5, end_users=100,
+                  ramp_duration=60, hold_duration=120)</code></pre>
+
+      <div class="method-sig"><code>spike_test(engine, scenario, base_users, spike_users, spike_duration, cycles=3)</code></div>
+      <p>Alternate between baseline and spike load for the specified number of cycles.</p>
+      <pre><code class="language-python">from loadspiker.utils import spike_test
+results = spike_test(engine, scenario,
+                     base_users=10, spike_users=200,
+                     spike_duration=15, cycles=5)</code></pre>
+
+      <div class="method-sig"><code>stress_test(engine, scenario, max_users, step_size=10, step_duration=30)</code></div>
+      <p>Incrementally increase load by <code>step_size</code> users every <code>step_duration</code> seconds until <code>max_users</code> is reached or errors exceed threshold.</p>
+
+      <div class="method-sig"><code>constant_load(engine, scenario, users, duration)</code></div>
+      <p>Run a simple constant-load test. Equivalent to <code>engine.run_scenario</code> with no ramp-up.</p>
+
+      <div class="method-sig"><code>parse_load_pattern(pattern_string)</code></div>
+      <p>Parse a CLI-style load pattern string into a dict of parameters. See <a href="cli.html#load-patterns">CLI Load Pattern Syntax</a>.</p>
+      <pre><code class="language-python">from loadspiker.utils import parse_load_pattern
+params = parse_load_pattern("ramp:10:100:60")
+# {'type': 'ramp', 'start_users': 10, 'end_users': 100, 'duration': 60}</code></pre>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#engine">Engine</a>
+      <a href="#execute-request" class="toc-sub">execute_request()</a>
+      <a href="#run-scenario" class="toc-sub">run_scenario()</a>
+      <a href="#get-metrics" class="toc-sub">get_metrics()</a>
+      <a href="#reset-metrics" class="toc-sub">reset_metrics()</a>
+      <a href="#database-methods" class="toc-sub">Database Methods</a>
+      <a href="#websocket-methods" class="toc-sub">WebSocket Methods</a>
+      <a href="#mqtt-methods" class="toc-sub">MQTT Methods</a>
+      <a href="#tcp-methods" class="toc-sub">TCP Methods</a>
+      <a href="#udp-methods" class="toc-sub">UDP Methods</a>
+      <a href="#scenario">Scenario</a>
+      <a href="#reporters">Reporters</a>
+      <a href="#utilities">Utilities</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

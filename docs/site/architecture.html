@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html" class="active"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>Architecture</h1>
+      <p class="page-lead">A deep dive into LoadSpiker's layered architecture: from the Python API through the C extension to the protocol implementations.</p>
+
+      <h2 id="overview">Overview</h2>
+
+      <pre><code class="language-bash">Python API / CLI / Python Scripts
+└── Python C Extension (python_extension.c)
+    └── C Engine Core (engine.c)
+        ├── HTTP via libcurl
+        ├── WebSocket (websocket.c)
+        ├── TCP (tcp.c)
+        ├── UDP (udp.c)
+        ├── MQTT (mqtt.c)
+        └── Database (database.c)</code></pre>
+
+      <p>LoadSpiker is structured in three distinct layers:</p>
+      <ul>
+        <li><strong>Python Layer:</strong> The user-facing API (<code>loadspiker</code> package), CLI entry point, scenario builders, assertions, session management, and authentication. All user code lives here.</li>
+        <li><strong>Python C Extension:</strong> A thin bridge (<code>python_extension.c</code>) compiled as a shared library (<code>_loadspiker.so</code>). It translates Python calls into C function invocations, converts Python objects to C structs, and releases the GIL during long-running load phases.</li>
+        <li><strong>C Engine Core:</strong> The performance-critical heart of LoadSpiker. Manages a connection pool, a worker thread pool (POSIX pthreads), and routes requests to the appropriate protocol implementation.</li>
+      </ul>
+
+      <!-- ===================== C ENGINE ===================== -->
+      <h2 id="c-engine">C Engine Core (<code>engine.c</code>)</h2>
+
+      <h3>Connection Pool</h3>
+      <p>The engine maintains a bounded pool of CURL handles (<code>CURLM</code> multi-interface) managed by a mutex. Connections are leased to worker threads and returned after each request. The pool size is configured by <code>max_connections</code>.</p>
+
+      <h3>Worker Thread Pool</h3>
+      <p>Worker threads are created at engine initialization using POSIX <code>pthread_create</code>. Each thread pulls work items from a shared queue protected by a mutex and condition variable. The thread count is configured by <code>worker_threads</code>.</p>
+      <pre><code class="language-c">// Thread pool work item
+typedef struct {
+    engine_t       *engine;
+    request_t      *request;
+    response_t     *response;
+    pthread_mutex_t done_mutex;
+    pthread_cond_t  done_cond;
+    int             completed;
+} work_item_t;</code></pre>
+
+      <h3>Protocol Routing</h3>
+      <p>Requests are dispatched to protocol handlers via <code>engine_detect_protocol()</code>, which inspects the URL scheme:</p>
+      <pre><code class="language-c">protocol_type_t engine_detect_protocol(const char *url) {
+    if (strncmp(url, "http://",  7) == 0 ||
+        strncmp(url, "https://", 8) == 0)  return PROTOCOL_HTTP;
+    if (strncmp(url, "ws://",   5) == 0 ||
+        strncmp(url, "wss://",  6) == 0)   return PROTOCOL_WEBSOCKET;
+    if (strncmp(url, "tcp://",  6) == 0)   return PROTOCOL_TCP;
+    if (strncmp(url, "udp://",  6) == 0)   return PROTOCOL_UDP;
+    if (strncmp(url, "mqtt://", 7) == 0)   return PROTOCOL_MQTT;
+    if (strncmp(url, "db://",   5) == 0)   return PROTOCOL_DATABASE;
+    return PROTOCOL_HTTP; // default
+}</code></pre>
+
+      <h3>Generic Request / Response Structures</h3>
+      <p>All protocol handlers share a common <code>request_t</code> / <code>response_t</code> structure with a protocol-specific union for extra parameters:</p>
+      <pre><code class="language-c">typedef struct {
+    char            url[MAX_URL_LENGTH];
+    char            method[16];
+    char           *headers[MAX_HEADERS];
+    int             header_count;
+    char           *body;
+    size_t          body_length;
+    int             timeout_ms;
+    protocol_type_t protocol;
+    union {
+        mqtt_params_t     mqtt;
+        tcp_params_t      tcp;
+        udp_params_t      udp;
+        database_params_t db;
+    } protocol_params;
+} request_t;
+
+typedef struct {
+    int    status_code;
+    char  *body;
+    size_t body_length;
+    char  *headers[MAX_HEADERS];
+    int    header_count;
+    double response_time_ms;
+    char   error[256];
+} response_t;</code></pre>
+
+      <h3>Metrics Collection</h3>
+      <p>Metrics are accumulated using atomic increments (<code>__sync_fetch_and_add</code> / <code>_Atomic</code>) for lock-free performance. Response times are accumulated via a running sum and count, then divided on read.</p>
+
+      <!-- ===================== PYTHON EXTENSION ===================== -->
+      <h2 id="python-extension">Python C Extension (<code>python_extension.c</code>)</h2>
+
+      <p>The extension is built with <code>distutils</code> / <code>setuptools</code> and linked against the compiled <code>engine.c</code> object. It exposes a <code>PyMethodDef</code> table:</p>
+
+      <table>
+        <thead><tr><th>Python Method</th><th>C Function</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>create_engine</code></td><td><code>py_create_engine</code></td><td>Initialize the C engine, return a handle capsule</td></tr>
+          <tr><td><code>destroy_engine</code></td><td><code>py_destroy_engine</code></td><td>Free all engine resources</td></tr>
+          <tr><td><code>execute_request</code></td><td><code>py_execute_request</code></td><td>Single HTTP request, returns a Python dict</td></tr>
+          <tr><td><code>run_load_test</code></td><td><code>py_run_load_test</code></td><td>Full load test, releases GIL, returns metrics dict</td></tr>
+          <tr><td><code>get_metrics</code></td><td><code>py_get_metrics</code></td><td>Return current metrics as a Python dict</td></tr>
+          <tr><td><code>reset_metrics</code></td><td><code>py_reset_metrics</code></td><td>Zero all metric counters</td></tr>
+          <tr><td><code>websocket_connect</code></td><td><code>py_websocket_connect</code></td><td>Initiate WebSocket connection</td></tr>
+          <tr><td><code>websocket_send</code></td><td><code>py_websocket_send</code></td><td>Send WebSocket message</td></tr>
+          <tr><td><code>websocket_close</code></td><td><code>py_websocket_close</code></td><td>Close WebSocket connection</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <strong>Missing Python Bindings:</strong> The C implementations for TCP (<code>tcp.c</code>), UDP (<code>udp.c</code>), MQTT (<code>mqtt.c</code>), and Database (<code>database.c</code>) exist and compile correctly, but they are <strong>not yet exposed</strong> in <code>python_extension.c</code>. Only WebSocket is exposed beyond HTTP. This means calling <code>engine.tcp_connect()</code>, <code>engine.mqtt_connect()</code>, etc. from Python will raise <code>AttributeError</code> until the bindings are added.
+      </div>
+
+      <p>Use the helper to check at runtime:</p>
+      <pre><code class="language-python">def _has_protocol_method(engine, method_name):
+    """Check if a protocol method is available in the C extension."""
+    return hasattr(engine, method_name)
+
+from loadspiker import Engine
+engine = Engine()
+
+if _has_protocol_method(engine, 'tcp_connect'):
+    tcp_id = engine.tcp_connect("example.com", 9000)
+else:
+    print("TCP not available — skipping TCP test")</code></pre>
+
+      <!-- ===================== PROTOCOL IMPLEMENTATIONS ===================== -->
+      <h2 id="protocols-arch">Protocol Implementations</h2>
+
+      <table>
+        <thead><tr><th>File</th><th>Protocol</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>engine.c</code></td>
+            <td>HTTP / HTTPS</td>
+            <td><span class="badge badge-green">Real</span></td>
+            <td>Full libcurl integration with connection pooling and keep-alive</td>
+          </tr>
+          <tr>
+            <td><code>websocket.c</code></td>
+            <td>WebSocket</td>
+            <td><span class="badge badge-yellow">Simulated</span></td>
+            <td>Phase 1 timing simulation. No libwebsockets dependency required.</td>
+          </tr>
+          <tr>
+            <td><code>tcp.c</code></td>
+            <td>TCP</td>
+            <td><span class="badge badge-green">Real</span></td>
+            <td>POSIX socket-based implementation. Python bindings pending.</td>
+          </tr>
+          <tr>
+            <td><code>udp.c</code></td>
+            <td>UDP</td>
+            <td><span class="badge badge-green">Real</span></td>
+            <td>POSIX socket-based implementation. Python bindings pending.</td>
+          </tr>
+          <tr>
+            <td><code>mqtt.c</code></td>
+            <td>MQTT</td>
+            <td><span class="badge badge-green">Real</span></td>
+            <td>Implements CONNECT, PUBLISH, SUBSCRIBE, UNSUBACK packets. Python bindings pending.</td>
+          </tr>
+          <tr>
+            <td><code>database.c</code></td>
+            <td>Database</td>
+            <td><span class="badge badge-yellow">Simulated</span></td>
+            <td>Simulates connection pool overhead. No real DB drivers. Python bindings pending.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ===================== THREADING ===================== -->
+      <h2 id="threading">Threading Model</h2>
+
+      <h3>Worker Thread Pool</h3>
+      <p>At initialization, <code>worker_threads</code> POSIX threads are created and blocked on a condition variable, waiting for work items. The main thread (or any Python thread calling <code>run_scenario</code>) enqueues work items and waits for completion. This decouples request dispatch from execution and allows true parallel I/O.</p>
+
+      <h3>Mutex-Protected State</h3>
+      <p>The following shared state is protected by dedicated mutexes:</p>
+      <ul>
+        <li><code>engine-&gt;metrics_mutex</code> — Protects the metrics counters during updates.</li>
+        <li><code>engine-&gt;pool_mutex</code> — Protects the connection pool during lease/return operations.</li>
+        <li><code>websocket_state_mutex</code> — Protects the global WebSocket connection table.</li>
+        <li><code>mqtt_connections_mutex</code> — Protects the MQTT connection array.</li>
+        <li><code>tcp_connections_mutex</code> — Protects the TCP connection array.</li>
+      </ul>
+
+      <h3>GIL Release</h3>
+      <p>The extension calls <code>Py_BEGIN_ALLOW_THREADS</code> before entering the C load test loop and <code>Py_END_ALLOW_THREADS</code> after it completes. This releases the Python GIL, allowing other Python threads to execute concurrently while the C engine runs the load test. Result conversion back to Python objects happens after GIL reacquisition.</p>
+
+      <h3>Metrics Accumulation</h3>
+      <p>Each worker thread accumulates response time and counts into thread-local structures, which are merged into the global metrics at the end of each batch. This avoids contention on the metrics mutex during the hot path.</p>
+
+      <!-- ===================== MEMORY ===================== -->
+      <h2 id="memory">Memory Management</h2>
+
+      <h3>Cleanup Functions</h3>
+      <p>Each protocol module exports a <code>*_cleanup_all()</code> function called from <code>engine_destroy()</code>:</p>
+      <ul>
+        <li><code>tcp_cleanup_all(engine)</code> — Closes all open TCP sockets and frees descriptors</li>
+        <li><code>udp_cleanup_all(engine)</code> — Closes all UDP endpoints</li>
+        <li><code>mqtt_cleanup_all(engine)</code> — Sends MQTT DISCONNECT and closes all broker sockets</li>
+        <li><code>websocket_cleanup_all(engine)</code> — Clears all WebSocket connection state</li>
+        <li><code>database_cleanup_all(engine)</code> — Releases all simulated connection pool entries</li>
+      </ul>
+
+      <h3>Buffer Safety</h3>
+      <p>All string copies use <code>strncpy</code> with zero-initialization of the destination buffer before copying. Formatted writes use <code>snprintf</code> with explicit size limits. No <code>strcpy</code> or <code>sprintf</code> calls exist in the codebase.</p>
+
+      <pre><code class="language-c">// Safe string copy pattern used throughout
+memset(dest, 0, sizeof(dest));
+strncpy(dest, src, sizeof(dest) - 1);
+// dest is always null-terminated
+
+// Safe formatted write
+char error_buf[256];
+snprintf(error_buf, sizeof(error_buf),
+         "Connection refused: %s:%d", host, port);</code></pre>
+
+      <h3>Credential Zeroing</h3>
+      <p>MQTT passwords are zeroed from memory immediately after the CONNECT packet is sent, preventing credentials from persisting in process memory:</p>
+      <pre><code class="language-c">// After CONNECT packet is sent in mqtt.c
+memset(params->password, 0, strlen(params->password));</code></pre>
+
+      <h3>malloc Checks</h3>
+      <p>Every <code>malloc</code> / <code>calloc</code> call is followed by a NULL check. On allocation failure, the error is propagated up through the return value and surfaced to Python as a <code>MemoryError</code>.</p>
+
+      <!-- ===================== DATA FLOW ===================== -->
+      <h2 id="data-flow">Request Data Flow</h2>
+
+      <ol>
+        <li><strong>Python call:</strong> User calls <code>engine.execute_request(url, method, headers, body)</code>.</li>
+        <li><strong>C Extension:</strong> <code>py_execute_request</code> parses Python arguments, builds a <code>request_t</code> struct, and enqueues a work item. GIL is released.</li>
+        <li><strong>Protocol Routing:</strong> <code>engine_detect_protocol(request-&gt;url)</code> returns the protocol type.</li>
+        <li><strong>Protocol Handler:</strong> The work item is dispatched to the appropriate handler (e.g., <code>engine_execute_http_request</code> for HTTP/HTTPS).</li>
+        <li><strong>Execution:</strong> The handler performs the actual I/O (libcurl for HTTP, raw sockets for TCP/UDP, etc.) and fills a <code>response_t</code> struct.</li>
+        <li><strong>Metrics Update:</strong> Response time and counters are atomically updated in the engine's metrics structure.</li>
+        <li><strong>GIL Reacquired:</strong> The C extension reacquires the GIL after the operation completes.</li>
+        <li><strong>Python Dict:</strong> <code>py_execute_request</code> converts <code>response_t</code> fields into a Python dict and returns it to the caller.</li>
+      </ol>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#overview">Overview</a>
+      <a href="#c-engine">C Engine Core</a>
+      <a href="#python-extension">Python C Extension</a>
+      <a href="#protocols-arch">Protocol Implementations</a>
+      <a href="#threading">Threading Model</a>
+      <a href="#memory">Memory Management</a>
+      <a href="#data-flow">Request Data Flow</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

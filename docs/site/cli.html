@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLI Reference — LoadSpiker Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle topbar-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <a href="index.html" class="topbar-brand">
+    <img src="assets/logo.png" alt="LoadSpiker" class="topbar-logo">
+    <span style="font-weight:400;color:var(--text-muted);font-size:.85rem">Docs</span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Search docs…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="theme-toggle" class="topbar-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Start Here</div>
+      <a href="index.html"><span class="nav-icon">🏠</span> Home</a>
+      <a href="getting-started.html"><span class="nav-icon">🚀</span> Getting Started</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="api-reference.html"><span class="nav-icon">📚</span> API Reference</a>
+      <a href="cli.html" class="active"><span class="nav-icon">💻</span> CLI Reference</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Guides</div>
+      <a href="protocols.html"><span class="nav-icon">🔌</span> Protocols</a>
+      <a href="assertions.html"><span class="nav-icon">✅</span> Assertions</a>
+      <a href="sessions-auth.html"><span class="nav-icon">🔐</span> Sessions &amp; Auth</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Project</div>
+      <a href="architecture.html"><span class="nav-icon">🏗️</span> Architecture</a>
+      <a href="troubleshooting.html"><span class="nav-icon">🔧</span> Troubleshooting</a>
+      <a href="roadmap.html"><span class="nav-icon">🗺️</span> Roadmap</a>
+      <a href="contributing.html"><span class="nav-icon">🤝</span> Contributing</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="content-area">
+
+      <h1>CLI Reference</h1>
+      <p class="page-lead">Complete reference for the <code>loadspiker</code> command-line interface.</p>
+
+      <h2 id="synopsis">Synopsis</h2>
+      <pre><code class="language-bash">loadspiker [URL] [OPTIONS]
+
+# Or using Python module invocation:
+python3 -m loadspiker [URL] [OPTIONS]</code></pre>
+
+      <pre><code class="language-bash">loadspiker [-h] [--version]
+           [-u USERS] [-d DURATION] [-r RAMP_UP] [-p PATTERN]
+           [--max-connections MAX_CONNECTIONS] [--threads THREADS]
+           [-m METHOD] [-H HEADER] [-b BODY] [-t TIMEOUT]
+           [-s SCENARIO] [-c CONFIG] [-i]
+           [--json [FILE]] [--html [FILE]] [-q] [--no-progress]
+           [URL]</code></pre>
+
+      <h2 id="positional">Positional Arguments</h2>
+      <table>
+        <thead>
+          <tr><th>Argument</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>URL</code></td>
+            <td>Target URL to load test. Must include the protocol (e.g., <code>https://example.com</code>). Optional if <code>--scenario</code> is provided.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="load-params">Load Parameters</h2>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>-u</code>, <code>--users</code></td>
+            <td>10</td>
+            <td>Number of concurrent virtual users</td>
+          </tr>
+          <tr>
+            <td><code>-d</code>, <code>--duration</code></td>
+            <td>60</td>
+            <td>Test duration in seconds</td>
+          </tr>
+          <tr>
+            <td><code>-r</code>, <code>--ramp-up</code></td>
+            <td>0</td>
+            <td>Seconds to linearly ramp from 0 to full user count before the main test window</td>
+          </tr>
+          <tr>
+            <td><code>-p</code>, <code>--pattern</code></td>
+            <td>—</td>
+            <td>Load pattern string (see <a href="#load-patterns">Load Pattern Syntax</a>). Overrides <code>--users</code> and <code>--duration</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="engine-config">Engine Configuration</h2>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>--max-connections</code></td>
+            <td>100</td>
+            <td>Maximum simultaneous connections in the C engine connection pool</td>
+          </tr>
+          <tr>
+            <td><code>--threads</code></td>
+            <td>4</td>
+            <td>Number of worker threads in the C engine thread pool</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="request-options">Request Options</h2>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>-m</code>, <code>--method</code></td>
+            <td>GET</td>
+            <td>HTTP method: GET, POST, PUT, DELETE, PATCH, HEAD</td>
+          </tr>
+          <tr>
+            <td><code>-H</code>, <code>--header</code></td>
+            <td>—</td>
+            <td>Add a request header in <code>Name: Value</code> format. Repeatable.</td>
+          </tr>
+          <tr>
+            <td><code>-b</code>, <code>--body</code></td>
+            <td>—</td>
+            <td>Request body string. Use <code>@filename</code> to read from a file.</td>
+          </tr>
+          <tr>
+            <td><code>-t</code>, <code>--timeout</code></td>
+            <td>30000</td>
+            <td>Per-request timeout in milliseconds</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="input-sources">Input Sources</h2>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>-s</code>, <code>--scenario</code></td>
+            <td>Path to a Python scenario file. If provided, the <code>URL</code> positional argument is not required.</td>
+          </tr>
+          <tr>
+            <td><code>-c</code>, <code>--config</code></td>
+            <td>Path to a JSON configuration file. Values here serve as defaults, overridden by flags.</td>
+          </tr>
+          <tr>
+            <td><code>-i</code>, <code>--interactive</code></td>
+            <td>Launch the interactive REPL (see <a href="#interactive">Interactive Mode</a>).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="output-options">Output Options</h2>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>--json [FILE]</code></td>
+            <td>Write results as JSON. If FILE is omitted, outputs to stdout.</td>
+          </tr>
+          <tr>
+            <td><code>--html [FILE]</code></td>
+            <td>Write an HTML report. Defaults to <code>report.html</code> if FILE is omitted.</td>
+          </tr>
+          <tr>
+            <td><code>-q</code>, <code>--quiet</code></td>
+            <td>Suppress all output except fatal errors.</td>
+          </tr>
+          <tr>
+            <td><code>--no-progress</code></td>
+            <td>Disable the live progress bar (useful in CI environments).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="load-patterns">Load Pattern Syntax</h2>
+      <p>The <code>--pattern</code> flag accepts a colon-delimited string describing the load shape.</p>
+
+      <h3>constant</h3>
+      <pre><code class="language-bash">--pattern "constant:USERS:DURATION"
+# Example: 50 users for 120 seconds
+loadspiker https://example.com --pattern "constant:50:120"</code></pre>
+
+      <h3>ramp</h3>
+      <pre><code class="language-bash">--pattern "ramp:START_USERS:END_USERS:DURATION"
+# Example: ramp from 5 to 100 users over 90 seconds
+loadspiker https://example.com --pattern "ramp:5:100:90"</code></pre>
+
+      <h3>spike</h3>
+      <pre><code class="language-bash">--pattern "spike:BASE_USERS:SPIKE_USERS:SPIKE_DURATION:BASE_DURATION"
+# Example: base of 10, spike to 300 for 15s, then back to 10 for 45s
+loadspiker https://example.com --pattern "spike:10:300:15:45"</code></pre>
+
+      <h2 id="examples">Examples</h2>
+
+      <pre><code class="language-bash"># Basic test: 20 users for 60 seconds
+loadspiker https://httpbin.org/get --users 20 --duration 60
+
+# POST request with JSON body and auth header
+loadspiker https://api.example.com/orders \
+  --method POST \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer mytoken123" \
+  --body '{"product_id": 42, "qty": 1}' \
+  --users 10 --duration 30
+
+# Ramp-up test: 0 → 100 users over 30s, hold for 60s
+loadspiker https://api.example.com/search \
+  --users 100 --duration 90 --ramp-up 30
+
+# Spike pattern
+loadspiker https://api.example.com/ \
+  --pattern "spike:10:500:10:50"
+
+# Run a scenario file with a config, output JSON and HTML
+loadspiker \
+  --scenario tests/smoke.py \
+  --config config.json \
+  --json results.json \
+  --html report.html
+
+# CI-friendly: no progress bar, exit code reflects pass/fail
+loadspiker https://api.example.com/health \
+  --users 5 --duration 10 \
+  --no-progress --quiet --json</code></pre>
+
+      <h2 id="interactive">Interactive Mode</h2>
+      <p>Start the REPL with <code>loadspiker --interactive</code> or <code>loadspiker -i</code>.</p>
+      <p>The interactive session gives you a live shell to build and run tests incrementally.</p>
+
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>get &lt;URL&gt;</code></td><td>Add a GET request to the current scenario</td></tr>
+          <tr><td><code>post &lt;URL&gt; &lt;body&gt;</code></td><td>Add a POST request with an optional body</td></tr>
+          <tr><td><code>run [users] [duration]</code></td><td>Execute the current scenario with given parameters</td></tr>
+          <tr><td><code>metrics</code></td><td>Display the current metrics from the last run</td></tr>
+          <tr><td><code>reset</code></td><td>Reset metrics counters and clear the current scenario</td></tr>
+          <tr><td><code>help</code></td><td>List all available interactive commands</td></tr>
+          <tr><td><code>quit</code> / <code>exit</code></td><td>Exit interactive mode</td></tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-bash">$ loadspiker --interactive
+LoadSpiker Interactive Mode (type 'help' for commands)
+&gt; get https://httpbin.org/get
+Added GET https://httpbin.org/get
+&gt; get https://httpbin.org/status/200
+Added GET https://httpbin.org/status/200
+&gt; run 5 30
+Running scenario with 5 users for 30 seconds...
+Total Requests: 342
+RPS: 11.40
+Avg Response: 87.2 ms
+Error Rate: 0.00%
+&gt; metrics
+[displays current metrics table]
+&gt; quit</code></pre>
+
+    </div>
+  </main>
+
+  <aside class="toc-panel">
+    <div class="toc-title">On this page</div>
+    <nav class="toc-nav">
+      <a href="#synopsis">Synopsis</a>
+      <a href="#positional">Positional Arguments</a>
+      <a href="#load-params">Load Parameters</a>
+      <a href="#engine-config">Engine Configuration</a>
+      <a href="#request-options">Request Options</a>
+      <a href="#input-sources">Input Sources</a>
+      <a href="#output-options">Output Options</a>
+      <a href="#load-patterns">Load Pattern Syntax</a>
+      <a href="#examples">Examples</a>
+      <a href="#interactive">Interactive Mode</a>
+    </nav>
+  </aside>
+
+</div>
+
+<footer class="site-footer">
+  <span>LoadSpiker Documentation</span>
+  <span>·</span>
+  <span>MIT License</span>
+  <span>·</span>
+  <a href="https://github.com/loadspiker/loadspiker">GitHub</a>
+</footer>
+
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

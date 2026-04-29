@@ -910,6 +910,96 @@ void engine_reset_metrics(engine_t* engine) {
     pthread_mutex_unlock(&engine->metrics_mutex);
 }
 
+static void* load_test_worker_func(void* arg) {
+    worker_thread_t* worker = (worker_thread_t*)arg;
+    if (!worker || !worker->engine) return NULL;
+    engine_t* engine = worker->engine;
+
+    while (!atomic_load(&engine->stop_flag)) {
+        pthread_mutex_lock(&engine->queue_mutex);
+
+        if (engine->queue_head == engine->queue_tail) {
+            pthread_mutex_unlock(&engine->queue_mutex);
+            break;  /* queue empty — this worker is done */
+        }
+
+        http_request_t request = engine->request_queue[engine->queue_head];
+        engine->queue_head = (engine->queue_head + 1) % engine->queue_size;
+        pthread_mutex_unlock(&engine->queue_mutex);
+
+        http_response_t response;
+        memset(&response, 0, sizeof(response));
+
+        CURL* curl = curl_easy_init();
+        if (!curl) {
+            pthread_mutex_lock(&engine->metrics_mutex);
+            engine->metrics.failed_requests++;
+            pthread_mutex_unlock(&engine->metrics_mutex);
+            continue;
+        }
+
+        response_buffer_t buffer = {0};
+        buffer.data = malloc(MAX_BODY_LENGTH);
+        if (!buffer.data) { curl_easy_cleanup(curl); continue; }
+        buffer.capacity = MAX_BODY_LENGTH;
+        buffer.data[0] = '\0';
+
+        header_buffer_t headers = {0};
+        headers.data = malloc(MAX_HEADER_LENGTH);
+        if (!headers.data) { free(buffer.data); curl_easy_cleanup(curl); continue; }
+        headers.capacity = MAX_HEADER_LENGTH;
+        headers.data[0] = '\0';
+
+        uint64_t start_us = get_time_us();
+
+        curl_easy_setopt(curl, CURLOPT_URL, request.url);
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request.method);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
+        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, request.timeout_ms > 0 ? request.timeout_ms : 30000);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+
+        if (strlen(request.body) > 0) {
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request.body);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(request.body));
+        }
+
+        struct curl_slist* header_list = NULL;
+        if (strlen(request.headers) > 0) {
+            char* header_copy = strdup(request.headers);
+            if (header_copy) {
+                char* token = strtok(header_copy, "\n");
+                while (token) {
+                    header_list = curl_slist_append(header_list, token);
+                    token = strtok(NULL, "\n");
+                }
+                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+                free(header_copy);
+            }
+        }
+
+        CURLcode res = curl_easy_perform(curl);
+        /* stop_flag=1 does not abort an in-flight perform; it only prevents the next request */
+        uint64_t response_time = get_time_us() - start_us;
+
+        long response_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+        bool success = (res == CURLE_OK && response_code >= 200 && response_code < 400);
+        update_metrics(engine, response_time, success);
+
+        if (header_list) curl_slist_free_all(header_list);
+        curl_easy_cleanup(curl);
+        free(buffer.data);
+        free(headers.data);
+    }
+
+    return NULL;
+}
+
 int engine_start_load_test(engine_t* engine, const http_request_t* requests, int num_requests, int concurrent_users, int duration_seconds) {
     if (!engine || !requests || num_requests <= 0) return -1;
     

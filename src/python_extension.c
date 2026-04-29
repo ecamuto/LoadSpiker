@@ -180,7 +180,9 @@ static PyObject* LoadTestEngine_get_metrics(LoadTestEngineObject* self, PyObject
     PyDict_SetItemString(metrics_dict, "min_response_time_us", PyLong_FromUnsignedLongLong(metrics.min_response_time_us));
     PyDict_SetItemString(metrics_dict, "max_response_time_us", PyLong_FromUnsignedLongLong(metrics.max_response_time_us));
     PyDict_SetItemString(metrics_dict, "requests_per_second", PyFloat_FromDouble(metrics.requests_per_second));
-    
+    PyDict_SetItemString(metrics_dict, "p95_us", PyLong_FromUnsignedLongLong(metrics.p95_us));
+    PyDict_SetItemString(metrics_dict, "p99_us", PyLong_FromUnsignedLongLong(metrics.p99_us));
+
     if (metrics.total_requests > 0) {
         double avg_response_time = (double)metrics.total_response_time_us / metrics.total_requests / 1000.0;
         PyDict_SetItemString(metrics_dict, "avg_response_time_ms", PyFloat_FromDouble(avg_response_time));

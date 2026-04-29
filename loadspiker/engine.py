@@ -50,6 +50,8 @@ class MetricsDict(TypedDict, total=False):
     max_response_time_ms: float
     avg_response_time_ms: float
     requests_per_second: float
+    p95_us: int
+    p99_us: int
 
 
 class ProtocolDataDict(TypedDict, total=False):

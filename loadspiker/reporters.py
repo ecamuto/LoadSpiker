@@ -73,7 +73,9 @@ class ConsoleReporter(BaseReporter):
         print(f"Avg Response Time:  {metrics.get('avg_response_time_ms', 0):.2f} ms")
         print(f"Min Response Time:  {metrics.get('min_response_time_us', 0) / 1000:.2f} ms")
         print(f"Max Response Time:  {metrics.get('max_response_time_us', 0) / 1000:.2f} ms")
-        
+        print(f"P95 Response Time:  {metrics.get('p95_us', 0) / 1000:.2f} ms")
+        print(f"P99 Response Time:  {metrics.get('p99_us', 0) / 1000:.2f} ms")
+
         # Status indicators
         if success_rate >= 95:
             print("🟢 Test Status: EXCELLENT")

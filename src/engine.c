@@ -525,7 +525,7 @@ static void* worker_thread_func(void* arg) {
     while (worker->active) {
         pthread_mutex_lock(&engine->queue_mutex);
         
-        while (engine->queue_head == engine->queue_tail && !engine->shutdown) {
+        while ((engine->queue_head == engine->queue_tail || engine->load_test_active) && !engine->shutdown) {
             pthread_cond_wait(&engine->queue_cond, &engine->queue_mutex);
         }
         

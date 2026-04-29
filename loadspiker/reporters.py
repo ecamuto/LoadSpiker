@@ -132,7 +132,7 @@ class JSONReporter(BaseReporter):
         })
         
     def report_metrics(self, metrics: Dict[str, Any]):
-        """Save final metrics to JSON"""
+        """Save final metrics to JSON. Includes p95_us and p99_us when present."""
         self.test_data['final_metrics'] = metrics
         
         with open(self.output_file, 'w') as f:
@@ -210,6 +210,14 @@ class HTMLReporter(BaseReporter):
         <div class="metric">
             <h3>Avg Response Time</h3>
             <div class="value">{metrics.get('avg_response_time_ms', 0):.1f} ms</div>
+        </div>
+        <div class="metric">
+            <h3>P95 Response Time</h3>
+            <div class="value">{metrics.get('p95_us', 0) / 1000:.1f} ms</div>
+        </div>
+        <div class="metric">
+            <h3>P99 Response Time</h3>
+            <div class="value">{metrics.get('p99_us', 0) / 1000:.1f} ms</div>
         </div>
     </div>
     

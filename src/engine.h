@@ -141,6 +141,9 @@ typedef struct {
     char error_message[256];
 } http_response_t;
 
+#define HISTOGRAM_BUCKET_COUNT 10000  /* 1ms per bucket, covers 0-10s */
+#define HISTOGRAM_OVERFLOW_INDEX (HISTOGRAM_BUCKET_COUNT - 1)
+
 typedef struct {
     uint64_t total_requests;
     uint64_t successful_requests;
@@ -149,6 +152,12 @@ typedef struct {
     uint64_t min_response_time_us;
     uint64_t max_response_time_us;
     double requests_per_second;
+    /* Histogram: bucket[i] counts responses with latency in [i*1000us, (i+1)*1000us).
+       Bucket HISTOGRAM_OVERFLOW_INDEX is the overflow bucket for latency >= 9999ms. */
+    uint64_t histogram_buckets[HISTOGRAM_BUCKET_COUNT];
+    /* Precomputed percentiles (populated by engine_get_metrics) */
+    uint64_t p95_us;
+    uint64_t p99_us;
 } metrics_t;
 
 typedef struct engine engine_t;

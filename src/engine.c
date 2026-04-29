@@ -48,6 +48,7 @@ struct engine {
     int queue_head;
     int queue_tail;
     bool shutdown;
+    struct timeval test_start_time;  /* wall-clock time when load test started */
 };
 
 static size_t write_callback(void* contents, size_t size, size_t nmemb, response_buffer_t* buffer) {

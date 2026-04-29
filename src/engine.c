@@ -499,7 +499,14 @@ static void update_metrics(engine_t* engine, uint64_t response_time_us, bool suc
     if (response_time_us > engine->metrics.max_response_time_us) {
         engine->metrics.max_response_time_us = response_time_us;
     }
-    
+
+    /* Insert into histogram (O(1)) */
+    size_t bucket = response_time_us / 1000;  /* 1ms buckets */
+    if (bucket >= HISTOGRAM_BUCKET_COUNT) {
+        bucket = HISTOGRAM_OVERFLOW_INDEX;
+    }
+    engine->metrics.histogram_buckets[bucket]++;
+
     pthread_mutex_unlock(&engine->metrics_mutex);
 }
 
@@ -846,15 +853,48 @@ int engine_execute_request(engine_t* engine, const http_request_t* request, http
 
 void engine_get_metrics(engine_t* engine, metrics_t* metrics) {
     if (!engine || !metrics) return;
-    
+
     pthread_mutex_lock(&engine->metrics_mutex);
     memcpy(metrics, &engine->metrics, sizeof(metrics_t));
-    
-    if (metrics->total_requests > 0) {
-        metrics->requests_per_second = (double)metrics->successful_requests / 
-            (metrics->total_response_time_us / 1000000.0 * engine->num_workers);
+
+    /* RPS: use wall-clock elapsed time, not cumulative response time */
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    double elapsed_sec = (now.tv_sec - engine->test_start_time.tv_sec) +
+                         (now.tv_usec - engine->test_start_time.tv_usec) / 1000000.0;
+    if (elapsed_sec > 0.0 && metrics->total_requests > 0) {
+        metrics->requests_per_second = (double)metrics->total_requests / elapsed_sec;
+    } else {
+        metrics->requests_per_second = 0.0;
     }
-    
+
+    /* Percentile computation from histogram */
+    if (metrics->total_requests > 0) {
+        uint64_t p95_target = (uint64_t)(metrics->total_requests * 0.95);
+        uint64_t p99_target = (uint64_t)(metrics->total_requests * 0.99);
+        uint64_t cumulative = 0;
+        bool p95_set = false, p99_set = false;
+
+        for (int i = 0; i < HISTOGRAM_BUCKET_COUNT; i++) {
+            cumulative += metrics->histogram_buckets[i];
+            if (!p95_set && cumulative >= p95_target) {
+                metrics->p95_us = (uint64_t)(i + 1) * 1000;
+                p95_set = true;
+            }
+            if (!p99_set && cumulative >= p99_target) {
+                metrics->p99_us = (uint64_t)(i + 1) * 1000;
+                p99_set = true;
+                break;
+            }
+        }
+        /* If not set (all in overflow bucket), use max */
+        if (!p95_set) metrics->p95_us = metrics->max_response_time_us;
+        if (!p99_set) metrics->p99_us = metrics->max_response_time_us;
+    } else {
+        metrics->p95_us = 0;
+        metrics->p99_us = 0;
+    }
+
     pthread_mutex_unlock(&engine->metrics_mutex);
 }
 
@@ -870,7 +910,9 @@ int engine_start_load_test(engine_t* engine, const http_request_t* requests, int
     if (!engine || !requests || num_requests <= 0) return -1;
     
     engine_reset_metrics(engine);
-    
+    /* Record wall-clock start time for RPS calculation */
+    gettimeofday(&engine->test_start_time, NULL);
+
     time_t start_time = time(NULL);
     time_t end_time = start_time + duration_seconds;
     

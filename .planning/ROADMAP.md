@@ -13,7 +13,7 @@ LoadSpiker is a brownfield C/Python load testing library with several correctnes
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Metrics Correctness** - Fix RPS calculation and add P95/P99 percentile tracking through all reporters (completed 2026-04-29)
-- [ ] **Phase 2: Dispatch & Rate Control** - Replace main-thread usleep loop with proper worker pool dispatch and correct rate pacing
+- [x] **Phase 2: Dispatch & Rate Control** - Replace main-thread usleep loop with proper worker pool dispatch and correct rate pacing (completed 2026-04-29)
 - [ ] **Phase 3: Thread Safety** - Mutex-protect all connection pools and replace non-reentrant libc calls
 - [ ] **Phase 4: Protocol I/O** - Implement real network I/O for TCP send/receive/disconnect, UDP receive/close, and MQTT correctness
 - [ ] **Phase 5: Test Infrastructure** - Add concurrent stress tests, metric accuracy tests, behavioral parity tests, and clean up test layout
@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 
 - [x] 01-01-PLAN.md — Fix RPS formula in engine.c, add histogram to metrics_t, expose p95_us/p99_us via Python extension bridge
-- [ ] 01-02-PLAN.md — Surface p95_us/p99_us in MetricsDict TypedDict and all three reporters (Console, JSON, HTML)
+- [x] 01-02-PLAN.md — Surface p95_us/p99_us in MetricsDict TypedDict and all three reporters (Console, JSON, HTML)
 
 ### Phase 2: Dispatch & Rate Control
 **Goal**: Load test execution uses the existing worker thread pool with correct per-worker rate pacing and reliable completion detection
@@ -48,8 +48,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 02-01: Dispatch requests to worker pool and implement completion barrier
-- [ ] 02-02: Implement correct per-worker rate pacing
+- [x] 02-01-PLAN.md — Rewrite engine_start_load_test: pre-fill queue, spawn per-test workers, pthread_join with hard timeout, _Atomic stop_flag, load_test_active guard
+- [ ] 02-02-PLAN.md — Verify GIL release in python_extension.c and audit dispatch path for stdout output
 
 ### Phase 3: Thread Safety
 **Goal**: All connection pools are safe to use from concurrent worker threads with no data races
@@ -106,8 +106,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Metrics Correctness | 2/2 | Complete   | 2026-04-29 |
-| 2. Dispatch & Rate Control | 0/2 | Not started | - |
+| 1. Metrics Correctness | 2/2 | Complete    | 2026-04-29 |
+| 2. Dispatch & Rate Control | 2/2 | Complete   | 2026-04-29 |
 | 3. Thread Safety | 0/2 | Not started | - |
 | 4. Protocol I/O | 0/3 | Not started | - |
 | 5. Test Infrastructure | 0/2 | Not started | - |

@@ -1001,25 +1001,99 @@ static void* load_test_worker_func(void* arg) {
 }
 
 int engine_start_load_test(engine_t* engine, const http_request_t* requests, int num_requests, int concurrent_users, int duration_seconds) {
-    if (!engine || !requests || num_requests <= 0) return -1;
-    
-    engine_reset_metrics(engine);
-    /* Record wall-clock start time for RPS calculation */
+    if (!engine || !requests || num_requests <= 0 || concurrent_users <= 0) return -1;
+
+    /* 1. Resize queue to hold all requests, fill it, and block pool workers */
+    pthread_mutex_lock(&engine->queue_mutex);
+
+    if (num_requests > engine->queue_size - 1) {
+        http_request_t* new_queue = realloc(engine->request_queue,
+                                            sizeof(http_request_t) * (num_requests + 1));
+        if (!new_queue) {
+            pthread_mutex_unlock(&engine->queue_mutex);
+            return -1;
+        }
+        engine->request_queue = new_queue;
+        engine->queue_size    = num_requests + 1;
+    }
+
+    engine->queue_head = 0;
+    engine->queue_tail = 0;
+    for (int i = 0; i < num_requests; i++) {
+        memcpy(&engine->request_queue[engine->queue_tail], &requests[i], sizeof(http_request_t));
+        engine->queue_tail = (engine->queue_tail + 1) % engine->queue_size;
+    }
+
+    atomic_store(&engine->stop_flag, 0);
+    engine->load_test_active = true;
+
+    pthread_mutex_unlock(&engine->queue_mutex);
+
+    /* 2. Record wall-clock start for RPS calculation */
     gettimeofday(&engine->test_start_time, NULL);
 
-    time_t start_time = time(NULL);
-    time_t end_time = start_time + duration_seconds;
-    
-    while (time(NULL) < end_time) {
-        for (int i = 0; i < num_requests && time(NULL) < end_time; i++) {
-            http_response_t response;
-            engine_execute_request(engine, &requests[i], &response);
-            
-            usleep(1000000 / concurrent_users);
+    /* 3. Spawn per-test worker threads (capped at num_requests) */
+    int actual_workers = (concurrent_users < num_requests) ? concurrent_users : num_requests;
+    worker_thread_t* test_workers = malloc(sizeof(worker_thread_t) * actual_workers);
+    if (!test_workers) {
+        pthread_mutex_lock(&engine->queue_mutex);
+        engine->load_test_active = false;
+        pthread_mutex_unlock(&engine->queue_mutex);
+        return -1;
+    }
+
+    int spawned = 0;
+    for (int i = 0; i < actual_workers; i++) {
+        test_workers[i].engine    = engine;
+        test_workers[i].thread_id = i;
+        test_workers[i].active    = true;
+        if (pthread_create(&test_workers[i].thread, NULL, load_test_worker_func, &test_workers[i]) != 0) {
+            test_workers[i].active = false;
+        } else {
+            spawned++;
         }
     }
-    
-    sleep(2);
-    
+
+    if (spawned == 0) {
+        pthread_mutex_lock(&engine->queue_mutex);
+        engine->load_test_active = false;
+        pthread_mutex_unlock(&engine->queue_mutex);
+        free(test_workers);
+        return -1;
+    }
+
+    /* 4. Wait until queue drains or hard timeout (duration + 5s grace period) */
+    time_t hard_stop = time(NULL) + duration_seconds + 5;
+
+    for (;;) {
+        pthread_mutex_lock(&engine->queue_mutex);
+        int empty = (engine->queue_head == engine->queue_tail);
+        pthread_mutex_unlock(&engine->queue_mutex);
+
+        if (empty || time(NULL) >= hard_stop) {
+            /* Signal workers to stop starting new requests */
+            atomic_store(&engine->stop_flag, 1);
+            break;
+        }
+
+        /* Poll every 50ms — avoids busy-wait */
+        struct timeval tv = {0, 50000};
+        select(0, NULL, NULL, NULL, &tv);
+    }
+
+    /* 5. Join all worker threads (each finishes its current in-flight request then exits) */
+    for (int i = 0; i < actual_workers; i++) {
+        if (test_workers[i].active) {
+            pthread_join(test_workers[i].thread, NULL);
+        }
+    }
+
+    /* 6. Unblock persistent pool workers */
+    pthread_mutex_lock(&engine->queue_mutex);
+    engine->load_test_active = false;
+    pthread_cond_broadcast(&engine->queue_cond);
+    pthread_mutex_unlock(&engine->queue_mutex);
+
+    free(test_workers);
     return 0;
 }

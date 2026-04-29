@@ -10,7 +10,7 @@
 - [x] **METR-01**: Engine reports RPS based on actual wall-clock elapsed time, not cumulative response time
 - [x] **METR-02**: `metrics_t` struct tracks a response-time histogram sufficient to compute P95 and P99
 - [x] **METR-03**: `MetricsDict` returned from `engine.get_metrics()` includes `p95_us` and `p99_us` fields
-- [ ] **METR-04**: ConsoleReporter, JSONReporter, and HTMLReporter display P95 and P99 latency
+- [x] **METR-04**: ConsoleReporter, JSONReporter, and HTMLReporter display P95 and P99 latency
 
 ### Dispatch
 
@@ -79,7 +79,7 @@
 | METR-01 | Phase 1 - Metrics Correctness | Complete (01-01) |
 | METR-02 | Phase 1 - Metrics Correctness | Complete (01-01) |
 | METR-03 | Phase 1 - Metrics Correctness | Complete (01-01) |
-| METR-04 | Phase 1 - Metrics Correctness | Pending |
+| METR-04 | Phase 1 - Metrics Correctness | Complete |
 | DISP-01 | Phase 2 - Dispatch & Rate Control | Pending |
 | DISP-02 | Phase 2 - Dispatch & Rate Control | Pending |
 | DISP-03 | Phase 2 - Dispatch & Rate Control | Pending |

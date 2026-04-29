@@ -12,7 +12,7 @@ LoadSpiker is a brownfield C/Python load testing library with several correctnes
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Metrics Correctness** - Fix RPS calculation and add P95/P99 percentile tracking through all reporters
+- [x] **Phase 1: Metrics Correctness** - Fix RPS calculation and add P95/P99 percentile tracking through all reporters (completed 2026-04-29)
 - [ ] **Phase 2: Dispatch & Rate Control** - Replace main-thread usleep loop with proper worker pool dispatch and correct rate pacing
 - [ ] **Phase 3: Thread Safety** - Mutex-protect all connection pools and replace non-reentrant libc calls
 - [ ] **Phase 4: Protocol I/O** - Implement real network I/O for TCP send/receive/disconnect, UDP receive/close, and MQTT correctness
@@ -106,7 +106,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Metrics Correctness | 1/2 | In progress | - |
+| 1. Metrics Correctness | 2/2 | Complete   | 2026-04-29 |
 | 2. Dispatch & Rate Control | 0/2 | Not started | - |
 | 3. Thread Safety | 0/2 | Not started | - |
 | 4. Protocol I/O | 0/3 | Not started | - |

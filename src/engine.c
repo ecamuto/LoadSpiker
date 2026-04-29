@@ -10,6 +10,8 @@
 #include <curl/curl.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <sys/select.h>
+#include <stdatomic.h>
 #include <unistd.h>
 
 typedef struct {
@@ -48,6 +50,8 @@ struct engine {
     int queue_head;
     int queue_tail;
     bool shutdown;
+    _Atomic int stop_flag;    /* cooperative cancel signal; set to 1 to stop load-test workers */
+    bool load_test_active;    /* true while a load test is running; blocks pool workers from dequeuing */
     struct timeval test_start_time;  /* wall-clock time when load test started */
 };
 

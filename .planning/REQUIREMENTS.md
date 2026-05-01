@@ -14,16 +14,16 @@
 
 ### Dispatch
 
-- [ ] **DISP-01**: `engine_start_load_test` dispatches requests to the existing worker thread pool instead of running a usleep loop on the calling thread
-- [ ] **DISP-02**: Rate limiting uses correct per-worker pacing (not `usleep(1000000 / concurrent_users)` integer division)
-- [ ] **DISP-03**: Load test completion is signaled via a proper barrier/counter, not a hardcoded `sleep(2)`
+- [x] **DISP-01**: `engine_start_load_test` dispatches requests to the existing worker thread pool instead of running a usleep loop on the calling thread
+- [x] **DISP-02**: Rate limiting uses correct per-worker pacing (not `usleep(1000000 / concurrent_users)` integer division)
+- [x] **DISP-03**: Load test completion is signaled via a proper barrier/counter, not a hardcoded `sleep(2)`
 
 ### Thread Safety
 
-- [ ] **SAFE-01**: TCP connection pool (`tcp_connections[]`, `tcp_connection_count`) is protected by a `pthread_mutex_t`
-- [ ] **SAFE-02**: UDP endpoint pool (`udp_endpoints[]`, `udp_endpoint_count`) is protected by a `pthread_mutex_t`
-- [ ] **SAFE-03**: MQTT connection pool (`mqtt_connections[]`, `mqtt_connection_count`) is protected by a `pthread_mutex_t`
-- [ ] **SAFE-04**: Database connection pool (`db_connections[]`, `db_connection_count`) is protected by a `pthread_mutex_t`
+- [x] **SAFE-01**: TCP connection pool (`tcp_connections[]`, `tcp_connection_count`) is protected by a `pthread_mutex_t`
+- [x] **SAFE-02**: UDP endpoint pool (`udp_endpoints[]`, `udp_endpoint_count`) is protected by a `pthread_mutex_t`
+- [x] **SAFE-03**: MQTT connection pool (`mqtt_connections[]`, `mqtt_connection_count`) is protected by a `pthread_mutex_t`
+- [x] **SAFE-04**: Database connection pool (`db_connections[]`, `db_connection_count`) is protected by a `pthread_mutex_t`
 - [ ] **SAFE-05**: `gethostbyname` replaced with `getaddrinfo` in `tcp.c`, `mqtt.c`, and `udp.c`
 - [ ] **SAFE-06**: `rand()` calls in MQTT and database code replaced with thread-safe `rand_r()` with per-thread seed state
 
@@ -83,10 +83,10 @@
 | DISP-01 | Phase 2 - Dispatch & Rate Control | Pending |
 | DISP-02 | Phase 2 - Dispatch & Rate Control | Pending |
 | DISP-03 | Phase 2 - Dispatch & Rate Control | Pending |
-| SAFE-01 | Phase 3 - Thread Safety | Pending |
-| SAFE-02 | Phase 3 - Thread Safety | Pending |
-| SAFE-03 | Phase 3 - Thread Safety | Pending |
-| SAFE-04 | Phase 3 - Thread Safety | Pending |
+| SAFE-01 | Phase 3 - Thread Safety | Complete |
+| SAFE-02 | Phase 3 - Thread Safety | Complete |
+| SAFE-03 | Phase 3 - Thread Safety | Complete |
+| SAFE-04 | Phase 3 - Thread Safety | Complete |
 | SAFE-05 | Phase 3 - Thread Safety | Pending |
 | SAFE-06 | Phase 3 - Thread Safety | Pending |
 | PROT-01 | Phase 4 - Protocol I/O | Pending |

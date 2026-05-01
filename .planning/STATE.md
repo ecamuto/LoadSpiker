@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-04-29T17:02:00.000Z"
+status: unknown
+last_updated: "2026-05-01T06:14:18.157Z"
 progress:
-  total_phases: 5
-  completed_phases: 1
-  total_plans: 11
-  completed_plans: 4
+  total_phases: 3
+  completed_phases: 2
+  total_plans: 7
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-29)
 
 **Core value:** Correct, trustworthy metrics across multiple protocols from a single process
-**Current focus:** Phase 2 - Dispatch & Rate Control
+**Current focus:** Phase 3 - Thread Safety
 
 ## Current Position
 
-Phase: 2 of 5 (Dispatch & Rate Control)
-Plan: 2 of 2 in current phase (complete)
-Status: Phase 02 complete — both plans done, ready for Phase 03
-Last activity: 2026-04-29 — Completed 02-02: GIL-release block, dispatch path stdout, and concurrent_users usage all audited and verified correct
+Phase: 3 of 5 (Thread Safety)
+Plan: 1 of 3 in current phase (complete)
+Status: 03-01 complete — protocol pool mutexes added to all four pools (TCP, UDP, MQTT, DB)
+Last activity: 2026-05-01 — Completed 03-01: Added PTHREAD_MUTEX_INITIALIZER mutexes to tcp, udp, mqtt, database pools guarding all array reads/writes
 
-Progress: [████░░░░░░] 36%
+Progress: [████░░░░░░] 45%
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [████░░░░░░] 36%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 03 P01 | 286 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,11 @@ Recent decisions affecting current work:
 - 02-02: GIL-release block correct — requests is plain C heap pointer, self->engine is engine_t*, safe without GIL
 - 02-02: engine.c dispatch path has zero stdout output — grep returned empty for printf/fprintf/puts/fputs
 - 02-02: concurrent_users is thread-count only — 3 occurrences: function signature, input guard, actual_workers assignment
+- 03-01: Inlined pool search inside compound functions (connect, send, etc.) to avoid double-lock deadlock when helpers now hold their own mutex
+- 03-01: Full-operation locking per prior decision — socket syscalls stay inside lock for correctness
+- 03-01: One-time pool-full stderr warnings per pool (tcp_pool_warned, udp_pool_warned, mqtt_pool_warned, db_pool_warned)
+- [Phase 03]: Inlined pool search inside compound functions to avoid double-lock deadlock when helpers now acquire their own mutex
+- [Phase 03]: One-time pool-full stderr warnings per pool (tcp/udp/mqtt/db_pool_warned) to avoid log spam
 
 ### Pending Todos
 
@@ -80,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-29
-Stopped at: Completed 02-02-PLAN.md — GIL-release block verified, dispatch path confirmed silent, concurrent_users confirmed as thread-count only
+Last session: 2026-05-01
+Stopped at: Completed 03-01-PLAN.md — protocol pool mutexes added to all four pools, build clean, all lock sites verified
 Resume file: None

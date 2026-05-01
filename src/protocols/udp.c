@@ -246,31 +246,31 @@ int udp_send(const char* host, int port, const char* data, response_t* response)
         endpoint->is_bound = true;
     }
 
-    // Resolve hostname
-    struct hostent* server = gethostbyname(host);
-    if (!server) {
+    // Resolve hostname (thread-safe getaddrinfo)
+    char port_str[8];
+    snprintf(port_str, sizeof(port_str), "%d", port);
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    int gai_err = getaddrinfo(host, port_str, &hints, &res);
+    if (gai_err != 0) {
         response->success = false;
         response->status_code = 404;
         snprintf(response->error_message, sizeof(response->error_message),
-                "Host not found: %s", host);
+                "DNS resolution failed for %s: %s", host, gai_strerror(gai_err));
         response->response_time_us = get_time_us() - start_time;
         pthread_mutex_unlock(&udp_pool_mutex);
         return -1;
     }
 
-    // Set up destination address
-    struct sockaddr_in dest_addr;
-    memset(&dest_addr, 0, sizeof(dest_addr));
-    dest_addr.sin_family = AF_INET;
-    memcpy(&dest_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    dest_addr.sin_port = htons(port);
-
     // Send UDP datagram
     size_t data_len = strlen(data);
     ssize_t bytes_sent = sendto(endpoint->socket_fd, data, data_len, 0,
-                               (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                               res->ai_addr, res->ai_addrlen);
 
     if (bytes_sent < 0) {
+        freeaddrinfo(res);
         response->success = false;
         response->status_code = 500;
         snprintf(response->error_message, sizeof(response->error_message),
@@ -279,6 +279,8 @@ int udp_send(const char* host, int port, const char* data, response_t* response)
         pthread_mutex_unlock(&udp_pool_mutex);
         return -1;
     }
+
+    freeaddrinfo(res);
 
     response->success = true;
     response->status_code = 200;

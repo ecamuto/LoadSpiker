@@ -157,35 +157,35 @@ int tcp_connect(const char* host, int port, response_t* response) {
         return -1;
     }
 
-    // Resolve hostname
-    struct hostent* server = gethostbyname(host);
-    if (!server) {
+    // Resolve hostname (thread-safe getaddrinfo)
+    char port_str[8];
+    snprintf(port_str, sizeof(port_str), "%d", port);
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int gai_err = getaddrinfo(host, port_str, &hints, &res);
+    if (gai_err != 0) {
         close(conn->socket_fd);
         conn->socket_fd = -1;
         response->success = false;
         response->status_code = 404;
         snprintf(response->error_message, sizeof(response->error_message),
-                "Host not found: %s", host);
+                "DNS resolution failed for %s: %s", host, gai_strerror(gai_err));
         response->response_time_us = get_time_us() - start_time;
         pthread_mutex_unlock(&tcp_pool_mutex);
         return -1;
     }
-
-    // Set up server address
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(port);
 
     // Set socket to non-blocking for timeout control
     int flags = fcntl(conn->socket_fd, F_GETFL, 0);
     fcntl(conn->socket_fd, F_SETFL, flags | O_NONBLOCK);
 
     // Attempt connection
-    int connect_result = connect(conn->socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    int connect_result = connect(conn->socket_fd, res->ai_addr, res->ai_addrlen);
 
     if (connect_result < 0 && errno != EINPROGRESS) {
+        freeaddrinfo(res);
         close(conn->socket_fd);
         conn->socket_fd = -1;
         response->success = false;
@@ -208,6 +208,7 @@ int tcp_connect(const char* host, int port, response_t* response) {
     int select_result = select(conn->socket_fd + 1, NULL, &write_fds, NULL, &timeout);
 
     if (select_result <= 0) {
+        freeaddrinfo(res);
         close(conn->socket_fd);
         conn->socket_fd = -1;
         response->success = false;
@@ -222,6 +223,7 @@ int tcp_connect(const char* host, int port, response_t* response) {
     int socket_error;
     socklen_t len = sizeof(socket_error);
     if (getsockopt(conn->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &len) < 0 || socket_error != 0) {
+        freeaddrinfo(res);
         close(conn->socket_fd);
         conn->socket_fd = -1;
         response->success = false;
@@ -235,6 +237,9 @@ int tcp_connect(const char* host, int port, response_t* response) {
 
     // Set socket back to blocking mode
     fcntl(conn->socket_fd, F_SETFL, flags);
+
+    // DNS result no longer needed after successful connect
+    freeaddrinfo(res);
 
     // Connection successful
     conn->is_connected = true;

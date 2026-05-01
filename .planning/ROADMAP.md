@@ -123,6 +123,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Metrics Correctness | 2/2 | Complete    | 2026-04-29 |
 | 2. Dispatch & Rate Control | 2/2 | Complete    | 2026-04-29 |
-| 3. Thread Safety | 0/3 | Not started | - |
+| 3. Thread Safety | 1/3 | In Progress|  |
 | 4. Protocol I/O | 0/3 | Not started | - |
 | 5. Test Infrastructure | 0/2 | Not started | - |

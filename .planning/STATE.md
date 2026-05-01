@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-05-01T06:14:18.157Z"
+last_updated: "2026-05-01T06:18:25.244Z"
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 ## Current Position
 
 Phase: 3 of 5 (Thread Safety)
-Plan: 1 of 3 in current phase (complete)
-Status: 03-01 complete — protocol pool mutexes added to all four pools (TCP, UDP, MQTT, DB)
-Last activity: 2026-05-01 — Completed 03-01: Added PTHREAD_MUTEX_INITIALIZER mutexes to tcp, udp, mqtt, database pools guarding all array reads/writes
+Plan: 2 of 3 in current phase (complete)
+Status: 03-02 complete — gethostbyname replaced with getaddrinfo in tcp/udp/mqtt, rand() replaced with rand_r in mqtt/database
+Last activity: 2026-05-01 — Completed 03-02: All non-reentrant libc calls replaced; zero gethostbyname/bare rand() in any protocol file
 
-Progress: [████░░░░░░] 45%
+Progress: [█████░░░░░] 55%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [████░░░░░░] 45%
 
 *Updated after each plan completion*
 | Phase 03 P01 | 286 | 2 tasks | 4 files |
+| Phase 03-thread-safety P02 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - 03-01: One-time pool-full stderr warnings per pool (tcp_pool_warned, udp_pool_warned, mqtt_pool_warned, db_pool_warned)
 - [Phase 03]: Inlined pool search inside compound functions to avoid double-lock deadlock when helpers now acquire their own mutex
 - [Phase 03]: One-time pool-full stderr warnings per pool (tcp/udp/mqtt/db_pool_warned) to avoid log spam
+- [Phase 03-thread-safety]: 03-02: getaddrinfo replaces gethostbyname in tcp/udp/mqtt — no global DNS buffer across concurrent threads
+- [Phase 03-thread-safety]: 03-02: rand_r with __thread seed from pthread_self() replaces rand() in mqtt/database — per-thread RNG, no global seed lock
 
 ### Pending Todos
 
@@ -87,5 +90,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-01
-Stopped at: Completed 03-01-PLAN.md — protocol pool mutexes added to all four pools, build clean, all lock sites verified
+Stopped at: Completed 03-02-PLAN.md — gethostbyname replaced with getaddrinfo in tcp/udp/mqtt, rand() replaced with rand_r in mqtt/database, build clean
 Resume file: None

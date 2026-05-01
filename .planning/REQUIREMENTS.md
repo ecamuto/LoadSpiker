@@ -24,8 +24,8 @@
 - [x] **SAFE-02**: UDP endpoint pool (`udp_endpoints[]`, `udp_endpoint_count`) is protected by a `pthread_mutex_t`
 - [x] **SAFE-03**: MQTT connection pool (`mqtt_connections[]`, `mqtt_connection_count`) is protected by a `pthread_mutex_t`
 - [x] **SAFE-04**: Database connection pool (`db_connections[]`, `db_connection_count`) is protected by a `pthread_mutex_t`
-- [ ] **SAFE-05**: `gethostbyname` replaced with `getaddrinfo` in `tcp.c`, `mqtt.c`, and `udp.c`
-- [ ] **SAFE-06**: `rand()` calls in MQTT and database code replaced with thread-safe `rand_r()` with per-thread seed state
+- [x] **SAFE-05**: `gethostbyname` replaced with `getaddrinfo` in `tcp.c`, `mqtt.c`, and `udp.c`
+- [x] **SAFE-06**: `rand()` calls in MQTT and database code replaced with thread-safe `rand_r()` with per-thread seed state
 
 ### Protocol Correctness (TCP/UDP)
 
@@ -87,8 +87,8 @@
 | SAFE-02 | Phase 3 - Thread Safety | Complete |
 | SAFE-03 | Phase 3 - Thread Safety | Complete |
 | SAFE-04 | Phase 3 - Thread Safety | Complete |
-| SAFE-05 | Phase 3 - Thread Safety | Pending |
-| SAFE-06 | Phase 3 - Thread Safety | Pending |
+| SAFE-05 | Phase 3 - Thread Safety | Complete |
+| SAFE-06 | Phase 3 - Thread Safety | Complete |
 | PROT-01 | Phase 4 - Protocol I/O | Pending |
 | PROT-02 | Phase 4 - Protocol I/O | Pending |
 | PROT-03 | Phase 4 - Protocol I/O | Pending |

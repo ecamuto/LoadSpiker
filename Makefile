@@ -1,4 +1,4 @@
-.PHONY: build install clean test example docs
+.PHONY: build install clean test example docs tsan
 
 # Build configuration
 CC = gcc
@@ -112,6 +112,46 @@ debug: $(DEBUG_LOADSPIKER_SO)
 	@echo "📦 Debug Extension: $(DEBUG_LOADSPIKER_SO)"
 	@echo "⚠️  Run with: ASAN_OPTIONS=abort_on_error=1:halt_on_error=1 python3 your_test.py"
 
+# Thread Sanitizer verification target
+TSAN_FLAGS = -fsanitize=thread -g -O1 -Wall -Wextra -pthread
+TSAN_ENGINE_OBJS = $(BUILD_DIR)/engine_tsan.o \
+    $(BUILD_DIR)/websocket_tsan.o \
+    $(BUILD_DIR)/mqtt_tsan.o \
+    $(BUILD_DIR)/database_tsan.o \
+    $(BUILD_DIR)/tcp_tsan.o \
+    $(BUILD_DIR)/udp_tsan.o
+TSAN_CHECK_OBJ = $(BUILD_DIR)/tsan_check.o
+TSAN_BIN = $(BUILD_DIR)/tsan_check
+
+$(BUILD_DIR)/engine_tsan.o: $(SRC_DIR)/engine.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) $(CURL_CFLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/websocket_tsan.o: $(SRC_DIR)/protocols/websocket.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/mqtt_tsan.o: $(SRC_DIR)/protocols/mqtt.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/database_tsan.o: $(SRC_DIR)/protocols/database.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/tcp_tsan.o: $(SRC_DIR)/protocols/tcp.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/udp_tsan.o: $(SRC_DIR)/protocols/udp.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) -fPIC -c $< -o $@
+
+$(TSAN_CHECK_OBJ): tests/tsan_check.c | $(BUILD_DIR)
+	$(CC) $(TSAN_FLAGS) -fPIC -c $< -o $@
+
+$(TSAN_BIN): $(TSAN_ENGINE_OBJS) $(TSAN_CHECK_OBJ)
+	$(CC) $(TSAN_FLAGS) $(TSAN_ENGINE_OBJS) $(TSAN_CHECK_OBJ) $(CURL_LIBS) -o $@
+
+tsan: $(TSAN_BIN)
+	@echo "Running TSAN stress check..."
+	$(TSAN_BIN)
+	@echo "TSAN check passed - no data races detected"
+
 # Install using pip
 install: build
 	python3 setup_env.py
@@ -206,6 +246,7 @@ help:
 	@echo "Available targets:"
 	@echo "  build       - Build the C extension"
 	@echo "  debug       - Build debug version with AddressSanitizer"
+	@echo "  tsan        - Build and run thread sanitizer check"
 	@echo "  install     - Install LoadSpiker"
 	@echo "  install-deps- Install system dependencies"
 	@echo "  clean       - Clean build artifacts"

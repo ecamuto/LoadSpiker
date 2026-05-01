@@ -180,13 +180,12 @@ int udp_create_endpoint(const char* host, int port, response_t* response) {
     snprintf(response->body, sizeof(response->body),
             "UDP endpoint created for %s:%d", host, port);
 
-    // Set UDP-specific response data
-    udp_data_t* udp_data = (udp_data_t*)response->protocol_data.protocol_data;
-    udp_data->datagram_sent = false;
+    // Set UDP-specific response data (use the engine.h union member to stay in bounds)
+    udp_response_data_t* udp_data = &response->protocol_data.udp;
     udp_data->bytes_sent = 0;
     udp_data->bytes_received = 0;
-    strncpy(udp_data->remote_host, host, sizeof(udp_data->remote_host) - 1);
-    udp_data->remote_port = port;
+    strncpy(udp_data->sender_address, host, sizeof(udp_data->sender_address) - 1);
+    udp_data->sender_port = port;
 
     response->response_time_us = get_time_us() - start_time;
 
@@ -287,12 +286,11 @@ int udp_send(const char* host, int port, const char* data, response_t* response)
     snprintf(response->body, sizeof(response->body),
             "Sent %zd bytes to %s:%d via UDP", bytes_sent, host, port);
 
-    // Set UDP-specific response data
-    udp_data_t* udp_data = (udp_data_t*)response->protocol_data.protocol_data;
+    // Set UDP-specific response data (use the engine.h union member to stay in bounds)
+    udp_response_data_t* udp_data = &response->protocol_data.udp;
     udp_data->bytes_sent = bytes_sent;
-    udp_data->datagram_sent = true;
-    strncpy(udp_data->remote_host, host, sizeof(udp_data->remote_host) - 1);
-    udp_data->remote_port = port;
+    strncpy(udp_data->sender_address, host, sizeof(udp_data->sender_address) - 1);
+    udp_data->sender_port = port;
 
     response->response_time_us = get_time_us() - start_time;
 
@@ -399,13 +397,11 @@ int udp_receive(const char* host, int port, response_t* response) {
     snprintf(response->body, sizeof(response->body),
             "Received %zd bytes from %s:%d via UDP", bytes_received, sender_ip, sender_port);
 
-    // Set UDP-specific response data
-    udp_data_t* udp_data = (udp_data_t*)response->protocol_data.protocol_data;
+    // Set UDP-specific response data (use the engine.h union member to stay in bounds)
+    udp_response_data_t* udp_data = &response->protocol_data.udp;
     udp_data->bytes_received = bytes_received;
-    strncpy(udp_data->received_data, buffer, sizeof(udp_data->received_data) - 1);
-    udp_data->received_data[sizeof(udp_data->received_data) - 1] = '\0';
-    strncpy(udp_data->remote_host, sender_ip, sizeof(udp_data->remote_host) - 1);
-    udp_data->remote_port = sender_port;
+    strncpy(udp_data->sender_address, sender_ip, sizeof(udp_data->sender_address) - 1);
+    udp_data->sender_port = sender_port;
 
     response->response_time_us = get_time_us() - start_time;
 

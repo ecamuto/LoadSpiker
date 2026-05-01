@@ -248,10 +248,8 @@ int tcp_connect(const char* host, int port, response_t* response) {
     snprintf(response->body, sizeof(response->body),
             "TCP connection established to %s:%d", host, port);
 
-    // Set TCP-specific response data
-    tcp_data_t* tcp_data = (tcp_data_t*)response->protocol_data.protocol_data;
-    tcp_data->connection_established = true;
-    tcp_data->connection_time_us = get_time_us() - start_time;
+    // Set TCP-specific response data (use engine.h union member to stay in bounds)
+    tcp_response_data_t* tcp_data = &response->protocol_data.tcp;
     tcp_data->bytes_sent = 0;
     tcp_data->bytes_received = 0;
 
@@ -309,10 +307,9 @@ int tcp_send(const char* host, int port, const char* data, response_t* response)
     snprintf(response->body, sizeof(response->body),
             "Sent %zd bytes to %s:%d", bytes_sent, host, port);
 
-    // Set TCP-specific response data
-    tcp_data_t* tcp_data = (tcp_data_t*)response->protocol_data.protocol_data;
+    // Set TCP-specific response data (use engine.h union member to stay in bounds)
+    tcp_response_data_t* tcp_data = &response->protocol_data.tcp;
     tcp_data->bytes_sent = bytes_sent;
-    tcp_data->connection_established = true;
 
     response->response_time_us = get_time_us() - start_time;
 
@@ -409,12 +406,9 @@ int tcp_receive(const char* host, int port, response_t* response) {
     snprintf(response->body, sizeof(response->body),
             "Received %zd bytes from %s:%d", bytes_received, host, port);
 
-    // Set TCP-specific response data
-    tcp_data_t* tcp_data = (tcp_data_t*)response->protocol_data.protocol_data;
+    // Set TCP-specific response data (use engine.h union member to stay in bounds)
+    tcp_response_data_t* tcp_data = &response->protocol_data.tcp;
     tcp_data->bytes_received = bytes_received;
-    tcp_data->connection_established = true;
-    strncpy(tcp_data->received_data, buffer, sizeof(tcp_data->received_data) - 1);
-    tcp_data->received_data[sizeof(tcp_data->received_data) - 1] = '\0';
 
     response->response_time_us = get_time_us() - start_time;
 

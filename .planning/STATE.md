@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-05-01T06:18:25.244Z"
+last_updated: "2026-05-01T08:48:00.000Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 
 ## Current Position
 
-Phase: 3 of 5 (Thread Safety)
-Plan: 2 of 3 in current phase (complete)
-Status: 03-02 complete — gethostbyname replaced with getaddrinfo in tcp/udp/mqtt, rand() replaced with rand_r in mqtt/database
-Last activity: 2026-05-01 — Completed 03-02: All non-reentrant libc calls replaced; zero gethostbyname/bare rand() in any protocol file
+Phase: 3 of 5 (Thread Safety) — COMPLETE
+Plan: 3 of 3 in current phase (complete)
+Status: 03-03 complete — make tsan exits 0 with zero DATA RACE warnings; tcp/udp protocol_data cast overflow fixed
+Last activity: 2026-05-01 — Completed 03-03: TSAN stress binary verifies all four protocol pools race-free under 32 concurrent threads
 
-Progress: [█████░░░░░] 55%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█████░░░░░] 55%
 *Updated after each plan completion*
 | Phase 03 P01 | 286 | 2 tasks | 4 files |
 | Phase 03-thread-safety P02 | 3 | 2 tasks | 4 files |
+| Phase 03-thread-safety P03 | 35 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase 03]: One-time pool-full stderr warnings per pool (tcp/udp/mqtt/db_pool_warned) to avoid log spam
 - [Phase 03-thread-safety]: 03-02: getaddrinfo replaces gethostbyname in tcp/udp/mqtt — no global DNS buffer across concurrent threads
 - [Phase 03-thread-safety]: 03-02: rand_r with __thread seed from pthread_self() replaces rand() in mqtt/database — per-thread RNG, no global seed lock
+- [Phase 03-thread-safety]: 03-03: Use separate *_tsan.o object files for TSAN build to avoid overwriting production .o files
+- [Phase 03-thread-safety]: 03-03: protocol_data accessed via typed union members (&response->protocol_data.tcp/.udp) not raw char[] cast — tcp_data_t/udp_data_t both exceed union size causing out-of-bounds writes
 
 ### Pending Todos
 
@@ -90,5 +93,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-01
-Stopped at: Completed 03-02-PLAN.md — gethostbyname replaced with getaddrinfo in tcp/udp/mqtt, rand() replaced with rand_r in mqtt/database, build clean
+Stopped at: Completed 03-03-PLAN.md — make tsan exits 0, no DATA RACE warnings, tcp/udp protocol_data overflow fixed, Phase 03 complete
 Resume file: None

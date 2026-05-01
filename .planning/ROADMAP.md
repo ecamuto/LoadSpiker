@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Metrics Correctness** - Fix RPS calculation and add P95/P99 percentile tracking through all reporters (completed 2026-04-29)
 - [x] **Phase 2: Dispatch & Rate Control** - Replace main-thread usleep loop with proper worker pool dispatch and correct rate pacing (completed 2026-04-29)
-- [ ] **Phase 3: Thread Safety** - Mutex-protect all connection pools and replace non-reentrant libc calls
+- [x] **Phase 3: Thread Safety** - Mutex-protect all connection pools and replace non-reentrant libc calls (completed 2026-05-01)
 - [ ] **Phase 4: Protocol I/O** - Implement real network I/O for TCP send/receive/disconnect, UDP receive/close, and MQTT correctness
 - [ ] **Phase 5: Test Infrastructure** - Add concurrent stress tests, metric accuracy tests, behavioral parity tests, and clean up test layout
 
@@ -123,6 +123,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Metrics Correctness | 2/2 | Complete    | 2026-04-29 |
 | 2. Dispatch & Rate Control | 2/2 | Complete    | 2026-04-29 |
-| 3. Thread Safety | 2/3 | In Progress|  |
+| 3. Thread Safety | 3/3 | Complete   | 2026-05-01 |
 | 4. Protocol I/O | 0/3 | Not started | - |
 | 5. Test Infrastructure | 0/2 | Not started | - |

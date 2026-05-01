@@ -5,6 +5,19 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdint.h>
+
+/* Per-thread RNG seed — initialized lazily on first use */
+static __thread unsigned int thread_rng_seed = 0;
+
+/* Inline helper to lazily initialize seed from pthread_self() */
+static inline unsigned int get_thread_seed(void) {
+    if (thread_rng_seed == 0) {
+        thread_rng_seed = (unsigned int)(uintptr_t)pthread_self();
+        if (thread_rng_seed == 0) thread_rng_seed = 1; /* avoid all-zero seed */
+    }
+    return thread_rng_seed;
+}
 
 // Connection pool for database connections
 #define MAX_DB_CONNECTIONS 100
@@ -257,8 +270,9 @@ int database_execute_query(const char* connection_string, const char* query, res
     bool is_update = (strncasecmp(query, "UPDATE", 6) == 0);
     bool is_delete = (strncasecmp(query, "DELETE", 6) == 0);
 
-    // Simulate query execution time (100-500ms)
-    usleep((100 + (rand() % 400)) * 1000);
+    // Simulate query execution time (100-500ms) using per-thread RNG
+    get_thread_seed();
+    usleep((100 + (rand_r(&thread_rng_seed) % 400)) * 1000);
 
     response->success = true;
     response->status_code = 200;

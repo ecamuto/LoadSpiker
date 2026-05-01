@@ -10,6 +10,19 @@
 #include <errno.h>
 #include <time.h>
 #include <pthread.h>
+#include <stdint.h>
+
+/* Per-thread RNG seed — initialized lazily on first use */
+static __thread unsigned int thread_rng_seed = 0;
+
+/* Inline helper to lazily initialize seed from pthread_self() */
+static inline unsigned int get_thread_seed(void) {
+    if (thread_rng_seed == 0) {
+        thread_rng_seed = (unsigned int)(uintptr_t)pthread_self();
+        if (thread_rng_seed == 0) thread_rng_seed = 1; /* avoid all-zero seed */
+    }
+    return thread_rng_seed;
+}
 
 // Connection pool for MQTT connections
 #define MAX_MQTT_CONNECTIONS 50
@@ -35,13 +48,16 @@ int mqtt_parse_url(const char* url, char* host, int* port, char* client_id) {
         return -1;
     }
 
+    /* Ensure per-thread seed is initialized before any rand_r use */
+    get_thread_seed();
+
     // Parse mqtt://host:port/client_id format
     const char* protocol_end = strstr(url, "://");
     if (!protocol_end) {
         strncpy(host, url, 255);
         host[255] = '\0';
         *port = 1883; // Default MQTT port
-        snprintf(client_id, MAX_MQTT_CLIENT_ID_LENGTH, "loadspiker_%d", rand());
+        snprintf(client_id, MAX_MQTT_CLIENT_ID_LENGTH, "loadspiker_%u", rand_r(&thread_rng_seed));
         return 0;
     }
 
@@ -60,7 +76,7 @@ int mqtt_parse_url(const char* url, char* host, int* port, char* client_id) {
             strncpy(client_id, client_start + 1, MAX_MQTT_CLIENT_ID_LENGTH - 1);
         } else {
             *port = atoi(port_start + 1);
-            snprintf(client_id, MAX_MQTT_CLIENT_ID_LENGTH, "loadspiker_%d", rand());
+            snprintf(client_id, MAX_MQTT_CLIENT_ID_LENGTH, "loadspiker_%u", rand_r(&thread_rng_seed));
         }
     } else if (client_start) {
         // Host with client ID but no port
@@ -74,7 +90,7 @@ int mqtt_parse_url(const char* url, char* host, int* port, char* client_id) {
         strncpy(host, host_start, 255);
         host[255] = '\0';
         *port = 1883;
-        snprintf(client_id, MAX_MQTT_CLIENT_ID_LENGTH, "loadspiker_%d", rand());
+        snprintf(client_id, MAX_MQTT_CLIENT_ID_LENGTH, "loadspiker_%u", rand_r(&thread_rng_seed));
     }
 
     client_id[MAX_MQTT_CLIENT_ID_LENGTH - 1] = '\0';
@@ -317,27 +333,28 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         return -1;
     }
 
-    // Resolve hostname
-    struct hostent* server = gethostbyname(host);
-    if (!server) {
+    // Resolve hostname (thread-safe getaddrinfo)
+    char port_str[8];
+    snprintf(port_str, sizeof(port_str), "%d", port);
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int gai_err = getaddrinfo(host, port_str, &hints, &res);
+    if (gai_err != 0) {
         close(conn->socket_fd);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
-                "Failed to resolve hostname: %s", host);
+                "DNS resolution failed for %s: %s", host, gai_strerror(gai_err));
         response->response_time_us = get_time_us() - start_time;
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
     // Connect to server
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-
-    if (connect(conn->socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    if (connect(conn->socket_fd, res->ai_addr, res->ai_addrlen) < 0) {
+        freeaddrinfo(res);
         close(conn->socket_fd);
         response->status_code = 500;
         response->success = false;
@@ -347,6 +364,8 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
+
+    freeaddrinfo(res);
 
     // Send CONNECT packet
     char connect_packet[1024];

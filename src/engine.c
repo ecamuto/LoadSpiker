@@ -307,77 +307,80 @@ int engine_tcp_connect(engine_t* engine, const char* hostname, int port, int tim
 
 int engine_tcp_send(engine_t* engine, int socket_fd, const char* data, size_t data_len, int timeout_ms, response_t* response) {
     if (!engine || !data || !response) return -1;
-    
-    // TCP send function expects hostname and port, but we have socket_fd
-    // We need to adapt this - for now, create a placeholder implementation
-    uint64_t start_time = get_time_us();
-    
-    // Initialize response
-    memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_TCP;
-    response->status_code = 200; // Assume success for now
-    response->success = true;
-    response->protocol_data.tcp.socket_fd = socket_fd;
-    response->protocol_data.tcp.bytes_sent = data_len;
-    response->protocol_data.tcp.bytes_received = 0;
-    
-    uint64_t end_time = get_time_us();
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
+    (void)data_len;   /* tcp_send() uses strlen(data) internally */
+    (void)timeout_ms; /* tcp.c uses a fixed 5-second select() timeout */
+
+    char host[256];
+    int port = 0;
+    if (tcp_lookup_by_fd(socket_fd, host, &port) < 0) {
+        memset(response, 0, sizeof(response_t));
+        response->protocol = PROTOCOL_TCP;
+        response->success = false;
+        response->status_code = 400;
+        strcpy(response->error_message, "socket_fd not found in TCP pool");
+        return -1;
+    }
+
+    /* tcp_send() acquires mutex internally, handles partial-send retry,
+       and populates response->protocol_data.tcp.bytes_sent with actual count. */
+    int result = tcp_send(host, port, data, response);
+
     update_metrics(engine, response->response_time_us, response->success);
-    
-    return 0; // Return success for now
+    return result;
 }
 
 int engine_tcp_receive(engine_t* engine, int socket_fd, char* buffer, size_t buffer_size, int timeout_ms, response_t* response) {
     if (!engine || !buffer || !response) return -1;
-    
-    // TCP receive function expects hostname and port, but we have socket_fd
-    // We need to adapt this - for now, create a placeholder implementation
-    uint64_t start_time = get_time_us();
-    
-    // Initialize response
-    memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_TCP;
-    response->status_code = 200; // Assume success for now
-    response->success = true;
-    response->protocol_data.tcp.socket_fd = socket_fd;
-    response->protocol_data.tcp.bytes_sent = 0;
-    response->protocol_data.tcp.bytes_received = 0; // Would be set by actual implementation
-    
-    uint64_t end_time = get_time_us();
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
+    (void)timeout_ms; /* tcp.c uses a fixed 5-second select() timeout */
+
+    char host[256];
+    int port = 0;
+    if (tcp_lookup_by_fd(socket_fd, host, &port) < 0) {
+        memset(response, 0, sizeof(response_t));
+        response->protocol = PROTOCOL_TCP;
+        response->success = false;
+        response->status_code = 400;
+        strcpy(response->error_message, "socket_fd not found in TCP pool");
+        return -1;
+    }
+
+    /* tcp_receive() uses SO_RCVTIMEO with 5-second select() timeout per CONTEXT.md,
+       returns 0 bytes on timeout (success=true, status 204).
+       Populates response->protocol_data.tcp.bytes_received with actual count. */
+    int result = tcp_receive(host, port, response);
+
+    /* Copy received data into caller's buffer if provided and data was received. */
+    if (result == 0 && response->success && response->protocol_data.tcp.bytes_received > 0) {
+        size_t copy_len = response->protocol_data.tcp.bytes_received;
+        if (copy_len >= buffer_size) copy_len = buffer_size - 1;
+        memcpy(buffer, response->body, copy_len);
+        buffer[copy_len] = '\0';
+    }
+
     update_metrics(engine, response->response_time_us, response->success);
-    
-    return 0; // Return success for now
+    return result;
 }
 
 int engine_tcp_disconnect(engine_t* engine, int socket_fd, response_t* response) {
     if (!engine || !response) return -1;
-    
-    // TCP disconnect function expects hostname and port, but we have socket_fd
-    // We need to adapt this - for now, create a placeholder implementation
-    uint64_t start_time = get_time_us();
-    
-    // Initialize response
-    memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_TCP;
-    response->status_code = 200; // Assume success for now
-    response->success = true;
-    response->protocol_data.tcp.socket_fd = socket_fd;
-    response->protocol_data.tcp.bytes_sent = 0;
-    response->protocol_data.tcp.bytes_received = 0;
-    
-    uint64_t end_time = get_time_us();
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
+
+    char host[256];
+    int port = 0;
+    if (tcp_lookup_by_fd(socket_fd, host, &port) < 0) {
+        memset(response, 0, sizeof(response_t));
+        response->protocol = PROTOCOL_TCP;
+        response->success = false;
+        response->status_code = 400;
+        strcpy(response->error_message, "socket_fd not found in TCP pool");
+        return -1;
+    }
+
+    /* tcp_disconnect() calls shutdown(SHUT_RDWR)+close() and marks is_connected=false.
+       Pool slot remains (is_connected=false). Subsequent send/receive will fail. */
+    int result = tcp_disconnect(host, port, response);
+
     update_metrics(engine, response->response_time_us, response->success);
-    
-    return 0; // Return success for now
+    return result;
 }
 
 // UDP Socket functions

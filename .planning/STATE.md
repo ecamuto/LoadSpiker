@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 ## Current Position
 
 Phase: 4 of 5 (Protocol I/O) — IN PROGRESS
-Plan: 1 of 3 in current phase (complete)
-Status: 04-01 complete — TCP engine bridge wired to real socket I/O via tcp_lookup_by_fd(); 5s receive timeout, shutdown+close in disconnect
-Last activity: 2026-05-21 — Completed 04-01: engine_tcp_send/receive/disconnect delegate to tcp.c pool functions with real byte counts
+Plan: 2 of 3 in current phase (complete)
+Status: 04-02 complete — UDP engine bridge wired to real socket I/O via udp_lookup_by_fd(); bytes_received is real recvfrom count; 5s receive timeout
+Last activity: 2026-05-21 — Completed 04-02: engine_udp_receive/close_endpoint delegate to udp.c pool functions with real byte counts
 
 Progress: [████████░░] 80%
 
@@ -85,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 04-protocol-i-o]: 04-01: tcp_lookup_by_fd() in tcp.c/tcp.h reverse-maps socket_fd to host+port; engine bridge delegates entirely to tcp.c pool functions
 - [Phase 04-protocol-i-o]: 04-01: tcp_disconnect uses shutdown(SHUT_RDWR)+close() for graceful teardown; tcp_receive select() timeout raised from 1s to 5s per CONTEXT.md
 - [Phase 04-protocol-i-o]: 04-01: (void)param casts suppress intentionally-unused API params in engine bridge without altering engine.h public signatures
+- [Phase 04-protocol-i-o]: 04-02: udp_lookup_by_fd() in udp.c/udp.h reverse-maps socket_fd to host+port; engine bridge delegates entirely to udp.c pool functions
+- [Phase 04-protocol-i-o]: 04-02: udp_receive() select() timeout raised from 1s to 5s per CONTEXT.md; engine returns 400 when socket_fd not in pool
 
 ### Pending Todos
 
@@ -97,5 +99,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-21
-Stopped at: Completed 04-01-PLAN.md — TCP engine bridge wired to real socket I/O; tcp_lookup_by_fd(), shutdown+close, 5s receive timeout
+Stopped at: Completed 04-02-PLAN.md — UDP engine bridge wired to real socket I/O; udp_lookup_by_fd(), real recvfrom byte counts, 5s receive timeout
 Resume file: None

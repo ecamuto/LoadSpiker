@@ -29,11 +29,11 @@
 
 ### Protocol Correctness (TCP/UDP)
 
-- [ ] **PROT-01**: `engine_tcp_send()` sends data over the established socket and returns actual bytes transferred
-- [ ] **PROT-02**: `engine_tcp_receive()` reads from the established socket and returns actual bytes received
-- [ ] **PROT-03**: `engine_tcp_disconnect()` closes the socket and removes it from the connection pool
-- [ ] **PROT-04**: `engine_udp_receive()` reads a datagram from the socket and returns actual bytes received
-- [ ] **PROT-05**: `engine_udp_close_endpoint()` closes the socket and removes it from the endpoint pool
+- [x] **PROT-01**: `engine_tcp_send()` sends data over the established socket and returns actual bytes transferred
+- [x] **PROT-02**: `engine_tcp_receive()` reads from the established socket and returns actual bytes received
+- [x] **PROT-03**: `engine_tcp_disconnect()` closes the socket and removes it from the connection pool
+- [x] **PROT-04**: `engine_udp_receive()` reads a datagram from the socket and returns actual bytes received
+- [x] **PROT-05**: `engine_udp_close_endpoint()` closes the socket and removes it from the endpoint pool
 
 ### Protocol Correctness (MQTT)
 
@@ -89,11 +89,11 @@
 | SAFE-04 | Phase 3 - Thread Safety | Complete |
 | SAFE-05 | Phase 3 - Thread Safety | Complete |
 | SAFE-06 | Phase 3 - Thread Safety | Complete |
-| PROT-01 | Phase 4 - Protocol I/O | Pending |
-| PROT-02 | Phase 4 - Protocol I/O | Pending |
-| PROT-03 | Phase 4 - Protocol I/O | Pending |
-| PROT-04 | Phase 4 - Protocol I/O | Pending |
-| PROT-05 | Phase 4 - Protocol I/O | Pending |
+| PROT-01 | Phase 4 - Protocol I/O | Complete |
+| PROT-02 | Phase 4 - Protocol I/O | Complete |
+| PROT-03 | Phase 4 - Protocol I/O | Complete |
+| PROT-04 | Phase 4 - Protocol I/O | Complete |
+| PROT-05 | Phase 4 - Protocol I/O | Complete |
 | MQTT-01 | Phase 4 - Protocol I/O | Pending |
 | MQTT-02 | Phase 4 - Protocol I/O | Pending |
 | TEST-01 | Phase 5 - Test Infrastructure | Pending |

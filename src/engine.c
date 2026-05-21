@@ -422,52 +422,65 @@ int engine_udp_send(engine_t* engine, int socket_fd, const char* data, size_t da
 
 int engine_udp_receive(engine_t* engine, int socket_fd, char* buffer, size_t buffer_size, char* sender_address, int* sender_port, int timeout_ms, response_t* response) {
     if (!engine || !buffer || !response) return -1;
-    
-    // UDP receive function expects hostname and port, not socket_fd
-    // We need to adapt this - for now, create a placeholder implementation
-    uint64_t start_time = get_time_us();
-    
-    // Initialize response
-    memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_UDP;
-    response->status_code = 200; // Assume success for now
-    response->success = true;
-    response->protocol_data.udp.socket_fd = socket_fd;
-    response->protocol_data.udp.bytes_sent = 0;
-    response->protocol_data.udp.bytes_received = 0; // Would be set by actual implementation
-    
-    uint64_t end_time = get_time_us();
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
+    (void)timeout_ms;
+
+    char host[256];
+    int port = 0;
+    if (udp_lookup_by_fd(socket_fd, host, &port) < 0) {
+        memset(response, 0, sizeof(response_t));
+        response->protocol = PROTOCOL_UDP;
+        response->success = false;
+        response->status_code = 400;
+        strcpy(response->error_message, "socket_fd not found in UDP pool");
+        return -1;
+    }
+
+    /* udp_receive() uses select() with 5s timeout; returns success=true/status 204
+       on timeout per CONTEXT.md. Populates protocol_data.udp with real byte count
+       and sender info. */
+    int result = udp_receive(host, port, response);
+
+    /* Copy received data into caller's buffer if provided. */
+    if (result == 0 && response->success && response->protocol_data.udp.bytes_received > 0) {
+        size_t copy_len = response->protocol_data.udp.bytes_received;
+        if (copy_len >= buffer_size) copy_len = buffer_size - 1;
+        memcpy(buffer, response->body, copy_len);
+        buffer[copy_len] = '\0';
+    }
+
+    /* Populate optional sender info output params if provided. */
+    if (sender_address) {
+        strncpy(sender_address, response->protocol_data.udp.sender_address, 255);
+        sender_address[255] = '\0';
+    }
+    if (sender_port) {
+        *sender_port = response->protocol_data.udp.sender_port;
+    }
+
     update_metrics(engine, response->response_time_us, response->success);
-    
-    return 0; // Return success for now
+    return result;
 }
 
 int engine_udp_close_endpoint(engine_t* engine, int socket_fd, response_t* response) {
     if (!engine || !response) return -1;
-    
-    // UDP close function expects hostname and port, but we have socket_fd
-    // We need to adapt this - for now, create a placeholder implementation
-    uint64_t start_time = get_time_us();
-    
-    // Initialize response
-    memset(response, 0, sizeof(response_t));
-    response->protocol = PROTOCOL_UDP;
-    response->status_code = 200; // Assume success for now
-    response->success = true;
-    response->protocol_data.udp.socket_fd = socket_fd;
-    response->protocol_data.udp.bytes_sent = 0;
-    response->protocol_data.udp.bytes_received = 0;
-    
-    uint64_t end_time = get_time_us();
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
+
+    char host[256];
+    int port = 0;
+    if (udp_lookup_by_fd(socket_fd, host, &port) < 0) {
+        memset(response, 0, sizeof(response_t));
+        response->protocol = PROTOCOL_UDP;
+        response->success = false;
+        response->status_code = 400;
+        strcpy(response->error_message, "socket_fd not found in UDP pool");
+        return -1;
+    }
+
+    /* udp_close_endpoint() calls close(socket_fd) and marks is_bound=false.
+       Pool slot remains with is_bound=false. Subsequent receive will fail. */
+    int result = udp_close_endpoint(host, port, response);
+
     update_metrics(engine, response->response_time_us, response->success);
-    
-    return 0; // Return success for now
+    return result;
 }
 
 int engine_convert_http_response(const response_t* generic_resp, http_response_t* http_resp) {

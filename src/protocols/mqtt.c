@@ -521,7 +521,7 @@ int mqtt_publish(const char* host, int port, const char* client_id,
     response->response_time_us = get_time_us() - start_time;
 
     // Set MQTT-specific response data
-    mqtt_data_t* mqtt_data = (mqtt_data_t*)response->protocol_data.protocol_data;
+    mqtt_response_data_t* mqtt_data = &response->protocol_data.mqtt;
     mqtt_data->message_published = true;
     mqtt_data->messages_published_count++;
     strncpy(mqtt_data->topic, topic, sizeof(mqtt_data->topic) - 1);
@@ -545,8 +545,16 @@ static int mqtt_create_subscribe_packet(char* buffer, const char* topic,
     // Calculate remaining length: packet_id(2) + topic_len_field(2) + topic + qos(1)
     int remaining_length = 2 + 2 + topic_len + 1;
 
-    // Encode remaining length (simplified - assumes < 128)
-    buffer[pos++] = remaining_length;
+    /* Encode remaining length — multi-byte for topics >= 128 bytes (MQTT §1.5.5) */
+    int rl = remaining_length;
+    do {
+        char encoded_byte = rl % 128;
+        rl = rl / 128;
+        if (rl > 0) {
+            encoded_byte = encoded_byte | 128;
+        }
+        buffer[pos++] = encoded_byte;
+    } while (rl > 0);
 
     // Variable header - Packet ID
     buffer[pos++] = (packet_id >> 8) & 0xFF;
@@ -642,7 +650,7 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
     response->response_time_us = get_time_us() - start_time;
 
     // Set MQTT-specific response data
-    mqtt_data_t* mqtt_data = (mqtt_data_t*)response->protocol_data.protocol_data;
+    mqtt_response_data_t* mqtt_data = &response->protocol_data.mqtt;
     strncpy(mqtt_data->topic, topic, sizeof(mqtt_data->topic) - 1);
     mqtt_data->qos_level = qos;
 
@@ -660,8 +668,16 @@ static int mqtt_create_unsubscribe_packet(char* buffer, const char* topic, uint1
     // Calculate remaining length: packet_id(2) + topic_len_field(2) + topic
     int remaining_length = 2 + 2 + topic_len;
 
-    // Encode remaining length (simplified - assumes < 128)
-    buffer[pos++] = remaining_length;
+    /* Encode remaining length — multi-byte for topics >= 128 bytes (MQTT §1.5.5) */
+    int rl = remaining_length;
+    do {
+        char encoded_byte = rl % 128;
+        rl = rl / 128;
+        if (rl > 0) {
+            encoded_byte = encoded_byte | 128;
+        }
+        buffer[pos++] = encoded_byte;
+    } while (rl > 0);
 
     // Variable header - Packet ID
     buffer[pos++] = (packet_id >> 8) & 0xFF;

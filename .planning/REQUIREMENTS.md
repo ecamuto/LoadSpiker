@@ -37,8 +37,8 @@
 
 ### Protocol Correctness (MQTT)
 
-- [ ] **MQTT-01**: `mqtt_connect()` validates the CONNACK packet type byte (`0x20`) and return code (`0x00`) before reporting success
-- [ ] **MQTT-02**: `mqtt_create_subscribe_packet()` and `mqtt_create_unsubscribe_packet()` use correct multi-byte variable-length remaining-length encoding for topic names ≥ 128 bytes
+- [x] **MQTT-01**: `mqtt_connect()` validates the CONNACK packet type byte (`0x20`) and return code (`0x00`) before reporting success
+- [x] **MQTT-02**: `mqtt_create_subscribe_packet()` and `mqtt_create_unsubscribe_packet()` use correct multi-byte variable-length remaining-length encoding for topic names ≥ 128 bytes
 
 ### Test Infrastructure
 
@@ -94,8 +94,8 @@
 | PROT-03 | Phase 4 - Protocol I/O | Complete |
 | PROT-04 | Phase 4 - Protocol I/O | Complete |
 | PROT-05 | Phase 4 - Protocol I/O | Complete |
-| MQTT-01 | Phase 4 - Protocol I/O | Pending |
-| MQTT-02 | Phase 4 - Protocol I/O | Pending |
+| MQTT-01 | Phase 4 - Protocol I/O | Complete |
+| MQTT-02 | Phase 4 - Protocol I/O | Complete |
 | TEST-01 | Phase 5 - Test Infrastructure | Pending |
 | TEST-02 | Phase 5 - Test Infrastructure | Pending |
 | TEST-03 | Phase 5 - Test Infrastructure | Pending |

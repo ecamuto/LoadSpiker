@@ -8,7 +8,7 @@ progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 ## Current Position
 
 Phase: 4 of 5 (Protocol I/O) — IN PROGRESS
-Plan: 2 of 3 in current phase (complete)
-Status: 04-02 complete — UDP engine bridge wired to real socket I/O via udp_lookup_by_fd(); bytes_received is real recvfrom count; 5s receive timeout
-Last activity: 2026-05-21 — Completed 04-02: engine_udp_receive/close_endpoint delegate to udp.c pool functions with real byte counts
+Plan: 3 of 3 in current phase (complete)
+Status: 04-03 complete — MQTT correctness bugs fixed: full CONNACK validation, multi-byte remaining-length in subscribe/unsubscribe, union-safe protocol_data.mqtt access
+Last activity: 2026-05-21 — Completed 04-03: mqtt_connect() validates all four CONNACK fields; subscribe/unsubscribe use do/while variable-length encoding; all three mqtt_data casts replaced with typed union member
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [████████░░] 80%
 | Phase 03-thread-safety P02 | 3 | 2 tasks | 4 files |
 | Phase 03-thread-safety P03 | 35 | 2 tasks | 4 files |
 | Phase 04-protocol-i-o P01 | 3 | 2 tasks | 3 files |
+| Phase 04-protocol-i-o P03 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 04-protocol-i-o]: 04-01: (void)param casts suppress intentionally-unused API params in engine bridge without altering engine.h public signatures
 - [Phase 04-protocol-i-o]: 04-02: udp_lookup_by_fd() in udp.c/udp.h reverse-maps socket_fd to host+port; engine bridge delegates entirely to udp.c pool functions
 - [Phase 04-protocol-i-o]: 04-02: udp_receive() select() timeout raised from 1s to 5s per CONTEXT.md; engine returns 400 when socket_fd not in pool
+- [Phase 04-protocol-i-o]: 04-03: new_entry flag distinguishes freshly-allocated pool slots from reused disconnected slots — only decrement mqtt_connection_count on CONNACK failure when new_entry is true
+- [Phase 04-protocol-i-o]: 04-03: CONNACK validation checks all four MQTT 3.1.1 §3.2 fields (0x20/0x02/0x00/0x00) before marking is_connected=true; broker rejection produces descriptive error with return code hex
+- [Phase 04-protocol-i-o]: 04-03: mqtt_data accessed via &response->protocol_data.mqtt (mqtt_response_data_t*) not raw cast — same union-safe pattern as tcp/udp from Phase 03
 
 ### Pending Todos
 
@@ -99,5 +103,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-21
-Stopped at: Completed 04-02-PLAN.md — UDP engine bridge wired to real socket I/O; udp_lookup_by_fd(), real recvfrom byte counts, 5s receive timeout
+Stopped at: Completed 04-03-PLAN.md — MQTT correctness bugs fixed; CONNACK validation, multi-byte remaining-length, union-safe protocol_data.mqtt access
 Resume file: None

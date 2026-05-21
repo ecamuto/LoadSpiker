@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 
 ## Current Position
 
-Phase: 4 of 5 (Protocol I/O) — IN PROGRESS
-Plan: 3 of 3 in current phase (complete)
-Status: 04-03 complete — MQTT correctness bugs fixed: full CONNACK validation, multi-byte remaining-length in subscribe/unsubscribe, union-safe protocol_data.mqtt access
-Last activity: 2026-05-21 — Completed 04-03: mqtt_connect() validates all four CONNACK fields; subscribe/unsubscribe use do/while variable-length encoding; all three mqtt_data casts replaced with typed union member
+Phase: 4 of 5 (Protocol I/O) — COMPLETE
+Plan: 4 of 4 in current phase (complete)
+Status: 04-04 complete — tcp_send() partial-send retry loop added; while(total_sent < data_len) advances data pointer each iteration; engine_tcp_send() comment updated to "retries until all bytes are delivered or an error occurs"
+Last activity: 2026-05-21 — Completed 04-04: tcp_send() retry loop with total_sent accumulator; tcp_data->bytes_sent reflects full delivery count; engine.c comment is now accurate
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -91,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase 04-protocol-i-o]: 04-03: new_entry flag distinguishes freshly-allocated pool slots from reused disconnected slots — only decrement mqtt_connection_count on CONNACK failure when new_entry is true
 - [Phase 04-protocol-i-o]: 04-03: CONNACK validation checks all four MQTT 3.1.1 §3.2 fields (0x20/0x02/0x00/0x00) before marking is_connected=true; broker rejection produces descriptive error with return code hex
 - [Phase 04-protocol-i-o]: 04-03: mqtt_data accessed via &response->protocol_data.mqtt (mqtt_response_data_t*) not raw cast — same union-safe pattern as tcp/udp from Phase 03
+- [Phase 04-protocol-i-o]: 04-04: tcp_send() retry loop uses total_sent accumulator — loops while total_sent < data_len advancing data pointer each iteration; error path includes total_sent
+- [Phase 04-protocol-i-o]: 04-04: engine_tcp_send() comment updated to "retries until all bytes are delivered or an error occurs" — was inaccurately claiming retry behavior before this plan
 
 ### Pending Todos
 
@@ -103,5 +105,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-21
-Stopped at: Completed 04-03-PLAN.md — MQTT correctness bugs fixed; CONNACK validation, multi-byte remaining-length, union-safe protocol_data.mqtt access
+Stopped at: Completed 04-04-PLAN.md — tcp_send() partial-send retry loop; Phase 04 complete
 Resume file: None

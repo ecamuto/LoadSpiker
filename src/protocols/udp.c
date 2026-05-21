@@ -94,6 +94,22 @@ udp_endpoint_t* udp_create_endpoint_struct(const char* host, int port) {
     return endpoint;
 }
 
+int udp_lookup_by_fd(int socket_fd, char* host_out, int* port_out) {
+    pthread_mutex_lock(&udp_pool_mutex);
+    int found = 0;
+    for (int i = 0; i < udp_endpoint_count; i++) {
+        if (udp_endpoints[i].socket_fd == socket_fd && udp_endpoints[i].is_bound) {
+            strncpy(host_out, udp_endpoints[i].host, 255);
+            host_out[255] = '\0';
+            *port_out = udp_endpoints[i].port;
+            found = 1;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&udp_pool_mutex);
+    return found ? 0 : -1;
+}
+
 int udp_create_endpoint(const char* host, int port, response_t* response) {
     if (!host || port <= 0 || !response) {
         return -1;
@@ -349,7 +365,7 @@ int udp_receive(const char* host, int port, response_t* response) {
     struct timeval timeout;
     FD_ZERO(&read_fds);
     FD_SET(endpoint->socket_fd, &read_fds);
-    timeout.tv_sec = 1;  // 1 second timeout
+    timeout.tv_sec = 5;  // 5 second timeout per CONTEXT.md
     timeout.tv_usec = 0;
 
     int select_result = select(endpoint->socket_fd + 1, &read_fds, NULL, NULL, &timeout);

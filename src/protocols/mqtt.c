@@ -277,6 +277,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     uint64_t start_time = get_time_us();
 
     // Check if connection already exists (inline find — mutex already held)
+    bool new_entry = false;
     mqtt_connection_t* conn = NULL;
     for (int i = 0; i < mqtt_connection_count; i++) {
         if (strcmp(mqtt_connections[i].host, host) == 0 &&
@@ -319,6 +320,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         conn->socket_fd = -1;
         conn->packet_id = 1;
         conn->keep_alive_seconds = 60;
+        new_entry = true;
     }
 
     // Create socket
@@ -383,14 +385,51 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         return -1;
     }
 
-    // Read CONNACK (simplified - just check if we get any response)
+    /* Read CONNACK — MQTT 3.1.1 §3.2: fixed 4 bytes: 0x20 0x02 <ack_flags> <return_code> */
     char connack[4];
-    if (recv(conn->socket_fd, connack, sizeof(connack), 0) < 0) {
+    ssize_t connack_len = recv(conn->socket_fd, connack, sizeof(connack), 0);
+    if (connack_len < 0) {
         close(conn->socket_fd);
+        conn->socket_fd = -1;
+        /* Remove pool entry only if it was newly allocated for this call */
+        if (new_entry) {
+            mqtt_connection_count--;
+            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
+        }
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to receive CONNACK: %s", strerror(errno));
+        response->response_time_us = get_time_us() - start_time;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
+        return -1;
+    }
+    if (connack_len < 4 ||
+        (unsigned char)connack[0] != 0x20 ||
+        (unsigned char)connack[1] != 0x02 ||
+        (unsigned char)connack[2] != 0x00 ||
+        (unsigned char)connack[3] != 0x00) {
+        close(conn->socket_fd);
+        conn->socket_fd = -1;
+        /* Remove pool entry — bad CONNACK means connection was rejected; leave no half-open slot */
+        if (new_entry) {
+            mqtt_connection_count--;
+            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
+        }
+        response->status_code = 500;
+        response->success = false;
+        if (connack_len >= 4 && (unsigned char)connack[0] == 0x20 && (unsigned char)connack[1] == 0x02) {
+            /* Packet structure OK but broker rejected — include return code in message */
+            snprintf(response->error_message, sizeof(response->error_message),
+                    "MQTT broker rejected connection: CONNACK return code 0x%02X",
+                    (unsigned char)connack[3]);
+        } else {
+            snprintf(response->error_message, sizeof(response->error_message),
+                    "Invalid CONNACK packet (got 0x%02X 0x%02X, len=%zd)",
+                    connack_len > 0 ? (unsigned char)connack[0] : 0,
+                    connack_len > 1 ? (unsigned char)connack[1] : 0,
+                    connack_len);
+        }
         response->response_time_us = get_time_us() - start_time;
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
@@ -413,7 +452,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     response->response_time_us = get_time_us() - start_time;
 
     // Set MQTT-specific response data
-    mqtt_data_t* mqtt_data = (mqtt_data_t*)response->protocol_data.protocol_data;
+    mqtt_response_data_t* mqtt_data = &response->protocol_data.mqtt;
     mqtt_data->message_published = false;
     mqtt_data->message_received = false;
     mqtt_data->messages_published_count = 0;

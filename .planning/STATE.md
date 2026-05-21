@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-05-01T08:48:00.000Z"
+status: in_progress
+last_updated: "2026-05-21T10:49:00Z"
 progress:
-  total_phases: 3
+  total_phases: 5
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-29)
 
 **Core value:** Correct, trustworthy metrics across multiple protocols from a single process
-**Current focus:** Phase 3 - Thread Safety
+**Current focus:** Phase 4 - Protocol I/O
 
 ## Current Position
 
-Phase: 3 of 5 (Thread Safety) — COMPLETE
-Plan: 3 of 3 in current phase (complete)
-Status: 03-03 complete — make tsan exits 0 with zero DATA RACE warnings; tcp/udp protocol_data cast overflow fixed
-Last activity: 2026-05-01 — Completed 03-03: TSAN stress binary verifies all four protocol pools race-free under 32 concurrent threads
+Phase: 4 of 5 (Protocol I/O) — IN PROGRESS
+Plan: 1 of 3 in current phase (complete)
+Status: 04-01 complete — TCP engine bridge wired to real socket I/O via tcp_lookup_by_fd(); 5s receive timeout, shutdown+close in disconnect
+Last activity: 2026-05-21 — Completed 04-01: engine_tcp_send/receive/disconnect delegate to tcp.c pool functions with real byte counts
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [███████░░░] 70%
 | Phase 03 P01 | 286 | 2 tasks | 4 files |
 | Phase 03-thread-safety P02 | 3 | 2 tasks | 4 files |
 | Phase 03-thread-safety P03 | 35 | 2 tasks | 4 files |
+| Phase 04-protocol-i-o P01 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 03-thread-safety]: 03-02: rand_r with __thread seed from pthread_self() replaces rand() in mqtt/database — per-thread RNG, no global seed lock
 - [Phase 03-thread-safety]: 03-03: Use separate *_tsan.o object files for TSAN build to avoid overwriting production .o files
 - [Phase 03-thread-safety]: 03-03: protocol_data accessed via typed union members (&response->protocol_data.tcp/.udp) not raw char[] cast — tcp_data_t/udp_data_t both exceed union size causing out-of-bounds writes
+- [Phase 04-protocol-i-o]: 04-01: tcp_lookup_by_fd() in tcp.c/tcp.h reverse-maps socket_fd to host+port; engine bridge delegates entirely to tcp.c pool functions
+- [Phase 04-protocol-i-o]: 04-01: tcp_disconnect uses shutdown(SHUT_RDWR)+close() for graceful teardown; tcp_receive select() timeout raised from 1s to 5s per CONTEXT.md
+- [Phase 04-protocol-i-o]: 04-01: (void)param casts suppress intentionally-unused API params in engine bridge without altering engine.h public signatures
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-01
-Stopped at: Completed 03-03-PLAN.md — make tsan exits 0, no DATA RACE warnings, tcp/udp protocol_data overflow fixed, Phase 03 complete
+Last session: 2026-05-21
+Stopped at: Completed 04-01-PLAN.md — TCP engine bridge wired to real socket I/O; tcp_lookup_by_fd(), shutdown+close, 5s receive timeout
 Resume file: None

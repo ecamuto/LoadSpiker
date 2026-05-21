@@ -321,8 +321,8 @@ int engine_tcp_send(engine_t* engine, int socket_fd, const char* data, size_t da
         return -1;
     }
 
-    /* tcp_send() acquires mutex internally, handles partial-send retry,
-       and populates response->protocol_data.tcp.bytes_sent with actual count. */
+    /* tcp_send() acquires mutex internally, retries until all bytes are delivered
+       or an error occurs, and populates response->protocol_data.tcp.bytes_sent. */
     int result = tcp_send(host, port, data, response);
 
     update_metrics(engine, response->response_time_us, response->success);

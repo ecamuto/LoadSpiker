@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Metrics Correctness** - Fix RPS calculation and add P95/P99 percentile tracking through all reporters (completed 2026-04-29)
 - [x] **Phase 2: Dispatch & Rate Control** - Replace main-thread usleep loop with proper worker pool dispatch and correct rate pacing (completed 2026-04-29)
 - [x] **Phase 3: Thread Safety** - Mutex-protect all connection pools and replace non-reentrant libc calls (completed 2026-05-01)
-- [x] **Phase 4: Protocol I/O** - Implement real network I/O for TCP send/receive/disconnect, UDP receive/close, and MQTT correctness (completed 2026-05-21)
+- [ ] **Phase 4: Protocol I/O** - Implement real network I/O for TCP send/receive/disconnect, UDP receive/close, and MQTT correctness
 - [ ] **Phase 5: Test Infrastructure** - Add concurrent stress tests, metric accuracy tests, behavioral parity tests, and clean up test layout
 
 ## Phase Details
@@ -87,13 +87,14 @@ Plans:
   4. `engine_udp_receive()` reads a real datagram and returns the actual byte count; `engine_udp_close_endpoint()` closes the socket and removes the pool entry
   5. A TCP/MQTT connect attempt to a server that rejects the connection (bad CONNACK) is reported as a failure, not a success
 
-**Plans**: 3 plans
+**Plans**: 4 plans
 
 Plans:
 
 - [ ] 04-01-PLAN.md — Add tcp_lookup_by_fd() helper and replace engine_tcp_send/receive/disconnect stubs with real socket I/O
 - [ ] 04-02-PLAN.md — Add udp_lookup_by_fd() helper and replace engine_udp_receive/close_endpoint stubs with real socket I/O
 - [ ] 04-03-PLAN.md — Fix MQTT CONNACK 4-field validation, variable-length encoding in subscribe/unsubscribe, and union-safe protocol_data access
+- [ ] 04-04-PLAN.md — Add partial-send retry loop to tcp_send() and correct misleading comment in engine_tcp_send()
 
 ### Phase 5: Test Infrastructure
 
@@ -124,5 +125,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Metrics Correctness | 2/2 | Complete    | 2026-04-29 |
 | 2. Dispatch & Rate Control | 2/2 | Complete    | 2026-04-29 |
 | 3. Thread Safety | 3/3 | Complete    | 2026-05-01 |
-| 4. Protocol I/O | 3/3 | Complete   | 2026-05-21 |
+| 4. Protocol I/O | 3/4 | In Progress | - |
 | 5. Test Infrastructure | 0/2 | Not started | - |

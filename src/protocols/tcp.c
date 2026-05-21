@@ -304,28 +304,35 @@ int tcp_send(const char* host, int port, const char* data, response_t* response)
         return -1;
     }
 
-    // Send data
+    // Send data — retry loop handles partial sends per CONTEXT.md decision
     size_t data_len = strlen(data);
-    ssize_t bytes_sent = send(conn->socket_fd, data, data_len, 0);
+    size_t total_sent = 0;
 
-    if (bytes_sent < 0) {
-        response->success = false;
-        response->status_code = 500;
-        snprintf(response->error_message, sizeof(response->error_message),
-                "Send failed: %s", strerror(errno));
-        response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&tcp_pool_mutex);
-        return -1;
+    while (total_sent < data_len) {
+        ssize_t bytes_sent = send(conn->socket_fd,
+                                  data + total_sent,
+                                  data_len - total_sent,
+                                  0);
+        if (bytes_sent < 0) {
+            response->success = false;
+            response->status_code = 500;
+            snprintf(response->error_message, sizeof(response->error_message),
+                    "Send failed after %zu bytes: %s", total_sent, strerror(errno));
+            response->response_time_us = get_time_us() - start_time;
+            pthread_mutex_unlock(&tcp_pool_mutex);
+            return -1;
+        }
+        total_sent += (size_t)bytes_sent;
     }
 
     response->success = true;
     response->status_code = 200;
     snprintf(response->body, sizeof(response->body),
-            "Sent %zd bytes to %s:%d", bytes_sent, host, port);
+            "Sent %zu bytes to %s:%d", total_sent, host, port);
 
     // Set TCP-specific response data (use engine.h union member to stay in bounds)
     tcp_response_data_t* tcp_data = &response->protocol_data.tcp;
-    tcp_data->bytes_sent = bytes_sent;
+    tcp_data->bytes_sent = total_sent;
 
     response->response_time_us = get_time_us() - start_time;
 

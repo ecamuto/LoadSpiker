@@ -94,6 +94,22 @@ tcp_connection_t* tcp_create_connection(const char* host, int port) {
     return conn;
 }
 
+int tcp_lookup_by_fd(int socket_fd, char* host_out, int* port_out) {
+    pthread_mutex_lock(&tcp_pool_mutex);
+    int found = 0;
+    for (int i = 0; i < tcp_connection_count; i++) {
+        if (tcp_connections[i].socket_fd == socket_fd && tcp_connections[i].is_connected) {
+            strncpy(host_out, tcp_connections[i].host, 255);
+            host_out[255] = '\0';
+            *port_out = tcp_connections[i].port;
+            found = 1;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&tcp_pool_mutex);
+    return found ? 0 : -1;
+}
+
 int tcp_connect(const char* host, int port, response_t* response) {
     if (!host || port <= 0 || !response) {
         return -1;
@@ -355,7 +371,7 @@ int tcp_receive(const char* host, int port, response_t* response) {
     struct timeval timeout;
     FD_ZERO(&read_fds);
     FD_SET(conn->socket_fd, &read_fds);
-    timeout.tv_sec = 1;  // 1 second timeout
+    timeout.tv_sec = 5;  // 5 second timeout per CONTEXT.md
     timeout.tv_usec = 0;
 
     int select_result = select(conn->socket_fd + 1, &read_fds, NULL, NULL, &timeout);
@@ -445,9 +461,18 @@ int tcp_disconnect(const char* host, int port, response_t* response) {
         return -1;
     }
 
-    // Close socket
+    // Close socket with graceful shutdown per CONTEXT.md
     if (conn->socket_fd >= 0) {
-        close(conn->socket_fd);
+        if (shutdown(conn->socket_fd, SHUT_RDWR) < 0) {
+            /* already closed or not connected — ignore, proceed to close */
+        }
+        if (close(conn->socket_fd) < 0) {
+            static int disconnect_warn = 0;
+            if (!disconnect_warn) {
+                fprintf(stderr, "[LoadSpiker] TCP close() failed: %s\n", strerror(errno));
+                disconnect_warn = 1;
+            }
+        }
         conn->socket_fd = -1;
     }
 

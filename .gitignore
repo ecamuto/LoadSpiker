@@ -39,3 +39,4 @@ env/
 test_*.html
 test_*.json
 *.log
+.planning/

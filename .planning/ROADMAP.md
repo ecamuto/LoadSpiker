@@ -87,13 +87,13 @@ Plans:
   4. `engine_udp_receive()` reads a real datagram and returns the actual byte count; `engine_udp_close_endpoint()` closes the socket and removes the pool entry
   5. A TCP/MQTT connect attempt to a server that rejects the connection (bad CONNACK) is reported as a failure, not a success
 
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 
-- [ ] 04-01: Implement real TCP send/receive/disconnect socket I/O
-- [ ] 04-02: Implement real UDP receive and close endpoint socket I/O
-- [ ] 04-03: Fix MQTT CONNACK validation and variable-length encoding
+- [ ] 04-01-PLAN.md — Add tcp_lookup_by_fd() helper and replace engine_tcp_send/receive/disconnect stubs with real socket I/O
+- [ ] 04-02-PLAN.md — Add udp_lookup_by_fd() helper and replace engine_udp_receive/close_endpoint stubs with real socket I/O
+- [ ] 04-03-PLAN.md — Fix MQTT CONNACK 4-field validation, variable-length encoding in subscribe/unsubscribe, and union-safe protocol_data access
 
 ### Phase 5: Test Infrastructure
 
@@ -123,6 +123,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Metrics Correctness | 2/2 | Complete    | 2026-04-29 |
 | 2. Dispatch & Rate Control | 2/2 | Complete    | 2026-04-29 |
-| 3. Thread Safety | 3/3 | Complete   | 2026-05-01 |
+| 3. Thread Safety | 3/3 | Complete    | 2026-05-01 |
 | 4. Protocol I/O | 0/3 | Not started | - |
 | 5. Test Infrastructure | 0/2 | Not started | - |

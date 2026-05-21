@@ -33,6 +33,7 @@ int tcp_disconnect(const char* host, int port, response_t* response);
 int tcp_parse_url(const char* url, char* host, int* port);
 tcp_connection_t* tcp_find_connection(const char* host, int port);
 tcp_connection_t* tcp_create_connection(const char* host, int port);
+int tcp_lookup_by_fd(int socket_fd, char* host_out, int* port_out);
 
 // Cleanup function - closes all TCP connections
 void tcp_cleanup_all(void);

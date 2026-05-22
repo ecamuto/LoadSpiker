@@ -87,14 +87,16 @@ Plans:
   4. `engine_udp_receive()` reads a real datagram and returns the actual byte count; `engine_udp_close_endpoint()` closes the socket and removes the pool entry
   5. A TCP/MQTT connect attempt to a server that rejects the connection (bad CONNACK) is reported as a failure, not a success
 
-**Plans**: 4 plans
+**Plans**: 6 plans
 
 Plans:
 
-- [ ] 04-01-PLAN.md — Add tcp_lookup_by_fd() helper and replace engine_tcp_send/receive/disconnect stubs with real socket I/O
-- [ ] 04-02-PLAN.md — Add udp_lookup_by_fd() helper and replace engine_udp_receive/close_endpoint stubs with real socket I/O
-- [ ] 04-03-PLAN.md — Fix MQTT CONNACK 4-field validation, variable-length encoding in subscribe/unsubscribe, and union-safe protocol_data access
-- [ ] 04-04-PLAN.md — Add partial-send retry loop to tcp_send() and correct misleading comment in engine_tcp_send()
+- [x] 04-01-PLAN.md — Add tcp_lookup_by_fd() helper and replace engine_tcp_send/receive/disconnect stubs with real socket I/O
+- [x] 04-02-PLAN.md — Add udp_lookup_by_fd() helper and replace engine_udp_receive/close_endpoint stubs with real socket I/O
+- [x] 04-03-PLAN.md — Fix MQTT CONNACK 4-field validation, variable-length encoding in subscribe/unsubscribe, and union-safe protocol_data access
+- [x] 04-04-PLAN.md — Add partial-send retry loop to tcp_send() and correct misleading comment in engine_tcp_send()
+- [ ] 04-05-PLAN.md — Add 8 TCP/UDP handler functions and method table entries to python_extension.c (gap closure)
+- [ ] 04-06-PLAN.md — Fix 6 kwarg-mismatch call sites in CExtensionEngine to pass socket_fd= instead of hostname=/port= (gap closure)
 
 ### Phase 5: Test Infrastructure
 
@@ -125,5 +127,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Metrics Correctness | 2/2 | Complete    | 2026-04-29 |
 | 2. Dispatch & Rate Control | 2/2 | Complete    | 2026-04-29 |
 | 3. Thread Safety | 3/3 | Complete    | 2026-05-01 |
-| 4. Protocol I/O | 4/4 | Complete   | 2026-05-21 |
+| 4. Protocol I/O | 4/6 | In progress (gap closure) | - |
 | 5. Test Infrastructure | 0/2 | Not started | - |

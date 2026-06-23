@@ -1063,18 +1063,105 @@ class Engine:
         Returns:
             Test results and metrics
         """
-        requests = scenario.build_requests()
-        
-        if ramp_up_duration > 0:
-            self._run_with_ramp_up(requests, users, duration, ramp_up_duration)
+        # Pure-HTTP scenarios use the fast C request-queue load path. Scenarios
+        # with TCP/UDP/MQTT/Database/Mixed operations are driven by a
+        # Python-threaded runner that calls the (C-bridged) per-operation engine
+        # methods; metrics are still recorded inside the C engine.
+        http_only = scenario.is_http_only() if hasattr(scenario, "is_http_only") else True
+
+        if http_only:
+            requests = scenario.build_requests()
+
+            if ramp_up_duration > 0:
+                self._run_with_ramp_up(requests, users, duration, ramp_up_duration)
+            else:
+                self._engine.start_load_test(
+                    requests=requests,
+                    concurrent_users=users,
+                    duration_seconds=duration
+                )
         else:
-            self._engine.start_load_test(
-                requests=requests,
-                concurrent_users=users,
-                duration_seconds=duration
-            )
-        
+            self._run_protocol_load_test(scenario, users, duration)
+
         return self.get_metrics()
+
+    def _execute_operation(self, op: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a single typed scenario operation against the engine.
+
+        Handles HTTP (string or dict headers), the Mixed-scenario "websocket"
+        and "database" wrapper ops, and the direct protocol op types
+        (tcp_*, udp_*, mqtt_*, database_connect/query/disconnect) whose dict
+        fields match the corresponding engine method keyword arguments.
+        """
+        op_type = op.get("type", "http")
+
+        if op_type == "http":
+            headers = op.get("headers", "")
+            if isinstance(headers, dict):
+                headers = "\n".join(f"{k}: {v}" for k, v in headers.items())
+            return self._engine.execute_request(
+                url=op["url"],
+                method=op.get("method", "GET"),
+                headers=headers,
+                body=op.get("body", ""),
+                timeout_ms=op.get("timeout_ms", 30000),
+            )
+
+        if op_type == "websocket":
+            ws_op = op.get("operation")
+            if ws_op == "connect":
+                return self.websocket_connect(op["url"], op.get("subprotocol", ""))
+            if ws_op == "send":
+                return self.websocket_send(op["url"], op.get("message", ""))
+            if ws_op == "close":
+                return self.websocket_close(op["url"])
+            raise ValueError(f"Unknown websocket operation: {ws_op}")
+
+        if op_type == "database":  # Mixed-scenario wrapper form
+            db_op = op.get("operation")
+            if db_op == "connect":
+                return self.database_connect(op["connection_string"], op.get("db_type", "auto"))
+            if db_op == "query":
+                return self.database_query(op["connection_string"], op.get("query", ""))
+            if db_op == "disconnect":
+                return self.database_disconnect(op["connection_string"])
+            raise ValueError(f"Unknown database operation: {db_op}")
+
+        # Direct dispatch: the op dict fields are the method's keyword arguments.
+        method = getattr(self, op_type, None)
+        if method is None or not callable(method):
+            raise ValueError(f"Unknown operation type: {op_type}")
+        kwargs = {k: v for k, v in op.items() if k != "type"}
+        return method(**kwargs)
+
+    def _run_protocol_load_test(self, scenario: "Scenario", users: int, duration: int):
+        """Drive a non-HTTP scenario under concurrent load using worker threads.
+
+        Each virtual user repeatedly executes the scenario's operation list for
+        the full duration. Per-operation metrics are accumulated in the engine.
+        """
+        import threading
+
+        end_time = time.time() + duration
+
+        def worker(user_id: int):
+            operations = scenario.get_load_operations(user_id)
+            if not operations:
+                return
+            while time.time() < end_time:
+                for op in operations:
+                    if time.time() >= end_time:
+                        break
+                    try:
+                        self._execute_operation(op)
+                    except Exception as e:  # noqa: BLE001 - keep the user loop alive
+                        print(f"Operation error (user {user_id}): {e}")
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(max(1, users))]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
     
     def _run_with_ramp_up(self, requests: List[Dict[str, Any]], 
                          target_users: int, duration: int, ramp_up_duration: int):

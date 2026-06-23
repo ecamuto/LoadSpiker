@@ -161,12 +161,41 @@ class Scenario:
         """Process request with variable substitution"""
         url = self._substitute_variables(request.url, user_data)
         body = self._substitute_variables(request.body, user_data)
-        
+
         headers = {}
         for k, v in request.headers.items():
             headers[k] = self._substitute_variables(v, user_data)
-        
+
         return HTTPRequest(url, request.method, headers, body, request.timeout_ms)
+
+    # ------------------------------------------------------------------
+    # Unified load-operation interface
+    # ------------------------------------------------------------------
+    # Protocol scenarios (TCP/UDP/MQTT/Database/Mixed) define their own
+    # build_*_operations() returning a list of typed operation dicts. The base
+    # HTTP scenario builds plain request dicts. get_load_operations() normalizes
+    # both into a single list the engine load runner can execute, and
+    # is_http_only() lets the engine pick the fast C request-queue path for
+    # pure-HTTP scenarios.
+    _PROTOCOL_OP_BUILDERS = (
+        "build_mqtt_operations",
+        "build_tcp_operations",
+        "build_udp_operations",
+        "build_database_operations",
+        "build_mixed_operations",
+    )
+
+    def is_http_only(self) -> bool:
+        """True when this scenario only issues HTTP requests."""
+        return not any(hasattr(self, m) for m in self._PROTOCOL_OP_BUILDERS)
+
+    def get_load_operations(self, user_id: int = 0) -> List[Dict[str, Any]]:
+        """Return a normalized list of typed operation dicts for execution."""
+        for builder in self._PROTOCOL_OP_BUILDERS:
+            if hasattr(self, builder):
+                return getattr(self, builder)(user_id)
+        # Plain HTTP scenario: tag each request dict with type "http".
+        return [dict(type="http", **req) for req in self.build_requests(user_id)]
     
     def _substitute_variables(self, text: str, user_data: Dict[str, Dict[str, Any]] = None) -> str:
         """Substitute variables in text using ${var} syntax"""

@@ -276,6 +276,19 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
 
+    /* Bound-check inputs before building the fixed-size CONNECT packet (1024 B).
+       Caps guarantee the packet builder can never overflow its stack buffer. */
+    if (strlen(client_id) > MAX_MQTT_CLIENT_ID_LENGTH - 1 ||
+        (username && strlen(username) > MAX_MQTT_USERNAME_LENGTH - 1) ||
+        (password && strlen(password) > MAX_MQTT_PASSWORD_LENGTH - 1)) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT client_id/username/password too long");
+        response->response_time_us = get_time_us() - start_time;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
+        return -1;
+    }
+
     // Check if connection already exists (inline find — mutex already held)
     bool new_entry = false;
     mqtt_connection_t* conn = NULL;
@@ -345,6 +358,11 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     int gai_err = getaddrinfo(host, port_str, &hints, &res);
     if (gai_err != 0) {
         close(conn->socket_fd);
+        conn->socket_fd = -1;
+        if (new_entry) {
+            mqtt_connection_count--;
+            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
+        }
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
@@ -358,6 +376,11 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     if (connect(conn->socket_fd, res->ai_addr, res->ai_addrlen) < 0) {
         freeaddrinfo(res);
         close(conn->socket_fd);
+        conn->socket_fd = -1;
+        if (new_entry) {
+            mqtt_connection_count--;
+            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
+        }
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
@@ -376,6 +399,12 @@ int mqtt_connect(const char* host, int port, const char* client_id,
 
     if (send(conn->socket_fd, connect_packet, packet_len, 0) < 0) {
         close(conn->socket_fd);
+        conn->socket_fd = -1;
+        /* Roll back a freshly-allocated slot so cleanup never double-closes it */
+        if (new_entry) {
+            mqtt_connection_count--;
+            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
+        }
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
@@ -497,6 +526,17 @@ int mqtt_publish(const char* host, int port, const char* client_id,
         return -1;
     }
 
+    /* Bound-check topic+payload before building the fixed PUBLISH buffer. */
+    if (strlen(topic) > MAX_MQTT_TOPIC_LENGTH - 1 ||
+        strlen(message) > MAX_MQTT_MESSAGE_LENGTH - 1) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT topic or payload too long");
+        response->response_time_us = get_time_us() - start_time;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
+        return -1;
+    }
+
     // Create PUBLISH packet
     char publish_packet[MAX_MQTT_MESSAGE_LENGTH + 512];
     int packet_len = mqtt_create_publish_packet(publish_packet, topic, message,
@@ -598,6 +638,16 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
         response->status_code = 400;
         response->success = false;
         strcpy(response->error_message, "No active MQTT connection");
+        response->response_time_us = get_time_us() - start_time;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
+        return -1;
+    }
+
+    /* Bound-check topic before building the 512-byte SUBSCRIBE buffer. */
+    if (strlen(topic) > MAX_MQTT_TOPIC_LENGTH - 1) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT topic too long");
         response->response_time_us = get_time_us() - start_time;
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
@@ -718,6 +768,16 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
         response->status_code = 400;
         response->success = false;
         strcpy(response->error_message, "No active MQTT connection");
+        response->response_time_us = get_time_us() - start_time;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
+        return -1;
+    }
+
+    /* Bound-check topic before building the 512-byte UNSUBSCRIBE buffer. */
+    if (strlen(topic) > MAX_MQTT_TOPIC_LENGTH - 1) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT topic too long");
         response->response_time_us = get_time_us() - start_time;
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;

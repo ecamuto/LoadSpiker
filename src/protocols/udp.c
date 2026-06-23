@@ -111,7 +111,8 @@ int udp_lookup_by_fd(int socket_fd, char* host_out, int* port_out) {
 }
 
 int udp_create_endpoint(const char* host, int port, response_t* response) {
-    if (!host || port <= 0 || !response) {
+    /* port 0 is valid for a local endpoint (OS picks an ephemeral port). */
+    if (!host || port < 0 || !response) {
         return -1;
     }
 
@@ -315,7 +316,8 @@ int udp_send(const char* host, int port, const char* data, response_t* response)
 }
 
 int udp_receive(const char* host, int port, response_t* response) {
-    if (!host || port <= 0 || !response) {
+    /* port 0 is valid: receive on the OS-assigned ephemeral port. */
+    if (!host || port < 0 || !response) {
         return -1;
     }
 
@@ -410,8 +412,13 @@ int udp_receive(const char* host, int port, response_t* response) {
 
     response->success = true;
     response->status_code = 200;
-    snprintf(response->body, sizeof(response->body),
-            "Received %zd bytes from %s:%d via UDP", bytes_received, sender_ip, sender_port);
+    /* Store the actual received datagram payload in body for the caller. */
+    {
+        size_t copy_len = (size_t)bytes_received;
+        if (copy_len >= sizeof(response->body)) copy_len = sizeof(response->body) - 1;
+        memcpy(response->body, buffer, copy_len);
+        response->body[copy_len] = '\0';
+    }
 
     // Set UDP-specific response data (use the engine.h union member to stay in bounds)
     udp_response_data_t* udp_data = &response->protocol_data.udp;

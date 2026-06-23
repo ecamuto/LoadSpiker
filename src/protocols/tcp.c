@@ -426,8 +426,14 @@ int tcp_receive(const char* host, int port, response_t* response) {
     buffer[bytes_received] = '\0';
     response->success = true;
     response->status_code = 200;
-    snprintf(response->body, sizeof(response->body),
-            "Received %zd bytes from %s:%d", bytes_received, host, port);
+    /* Store the actual received payload in body so callers can read it back
+       (the byte count is reported separately via protocol_data). */
+    {
+        size_t copy_len = (size_t)bytes_received;
+        if (copy_len >= sizeof(response->body)) copy_len = sizeof(response->body) - 1;
+        memcpy(response->body, buffer, copy_len);
+        response->body[copy_len] = '\0';
+    }
 
     // Set TCP-specific response data (use engine.h union member to stay in bounds)
     tcp_response_data_t* tcp_data = &response->protocol_data.tcp;

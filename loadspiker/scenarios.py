@@ -704,8 +704,8 @@ class MQTTScenario(Scenario):
     def build_mqtt_operations(self, user_id: int = 0) -> List[Dict[str, Any]]:
         """Build MQTT operations for execution"""
         processed_operations = []
-        user_data = self.data_manager.get_all_user_data(user_id) if self.data_manager.list_sources() else {}
-        
+        user_data = self.data_manager.get_all_user_data(user_id)
+
         for operation in self.mqtt_operations:
             processed_op = operation.copy()
             

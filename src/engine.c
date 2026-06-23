@@ -30,7 +30,7 @@ typedef struct worker_thread {
     pthread_t thread;
     engine_t* engine;
     int thread_id;
-    bool active;
+    _Atomic bool active;
 } worker_thread_t;
 
 struct engine {
@@ -38,18 +38,17 @@ struct engine {
     worker_thread_t* workers;
     int num_workers;
     int max_connections;
-    
+
     pthread_mutex_t metrics_mutex;
     metrics_t metrics;
-    
+
     pthread_mutex_t queue_mutex;
     pthread_cond_t queue_cond;
     http_request_t* request_queue;
-    http_response_t* response_queue;
     int queue_size;
     int queue_head;
     int queue_tail;
-    bool shutdown;
+    _Atomic bool shutdown;
     _Atomic int stop_flag;    /* cooperative cancel signal; set to 1 to stop load-test workers */
     bool load_test_active;    /* true while a load test is running; blocks pool workers from dequeuing */
     struct timeval test_start_time;  /* wall-clock time when load test started */
@@ -267,9 +266,7 @@ int engine_database_connect(engine_t* engine, const char* connection_string, con
     int result = database_connect(connection_string, db_type, response);
     
     // Update metrics for database operations
-    if (response->response_time_us > 0) {
-        update_metrics(engine, response->response_time_us, response->success);
-    }
+    update_metrics(engine, response->response_time_us, response->success);
     
     return result;
 }
@@ -278,210 +275,23 @@ int engine_database_query(engine_t* engine, const char* connection_string, const
     if (!engine || !connection_string || !query || !response) return -1;
     
     int result = database_execute_query(connection_string, query, response);
-    
+
     // Update metrics for database operations
-    if (response->response_time_us > 0) {
-        update_metrics(engine, response->response_time_us, response->success);
-    }
-    
-    return result;
-}
-
-// TCP Socket functions
-int engine_tcp_connect(engine_t* engine, const char* hostname, int port, int timeout_ms, response_t* response) {
-    if (!engine || !hostname || !response) return -1;
-    
-    uint64_t start_time = get_time_us();
-    int result = tcp_connect(hostname, port, response);
-    uint64_t end_time = get_time_us();
-    
-    // Set protocol and timing information
-    response->protocol = PROTOCOL_TCP;
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
     update_metrics(engine, response->response_time_us, response->success);
-    
+
     return result;
 }
 
-int engine_tcp_send(engine_t* engine, int socket_fd, const char* data, size_t data_len, int timeout_ms, response_t* response) {
-    if (!engine || !data || !response) return -1;
-    (void)data_len;   /* tcp_send() uses strlen(data) internally */
-    (void)timeout_ms; /* tcp.c uses a fixed 5-second select() timeout */
+int engine_database_disconnect(engine_t* engine, const char* connection_string, response_t* response) {
+    if (!engine || !connection_string || !response) return -1;
 
-    char host[256];
-    int port = 0;
-    if (tcp_lookup_by_fd(socket_fd, host, &port) < 0) {
-        memset(response, 0, sizeof(response_t));
-        response->protocol = PROTOCOL_TCP;
-        response->success = false;
-        response->status_code = 400;
-        strcpy(response->error_message, "socket_fd not found in TCP pool");
-        return -1;
-    }
-
-    /* tcp_send() acquires mutex internally, retries until all bytes are delivered
-       or an error occurs, and populates response->protocol_data.tcp.bytes_sent. */
-    int result = tcp_send(host, port, data, response);
+    int result = database_disconnect(connection_string, response);
 
     update_metrics(engine, response->response_time_us, response->success);
+
     return result;
 }
 
-int engine_tcp_receive(engine_t* engine, int socket_fd, char* buffer, size_t buffer_size, int timeout_ms, response_t* response) {
-    if (!engine || !buffer || !response) return -1;
-    (void)timeout_ms; /* tcp.c uses a fixed 5-second select() timeout */
-
-    char host[256];
-    int port = 0;
-    if (tcp_lookup_by_fd(socket_fd, host, &port) < 0) {
-        memset(response, 0, sizeof(response_t));
-        response->protocol = PROTOCOL_TCP;
-        response->success = false;
-        response->status_code = 400;
-        strcpy(response->error_message, "socket_fd not found in TCP pool");
-        return -1;
-    }
-
-    /* tcp_receive() uses SO_RCVTIMEO with 5-second select() timeout per CONTEXT.md,
-       returns 0 bytes on timeout (success=true, status 204).
-       Populates response->protocol_data.tcp.bytes_received with actual count. */
-    int result = tcp_receive(host, port, response);
-
-    /* Copy received data into caller's buffer if provided and data was received. */
-    if (result == 0 && response->success && response->protocol_data.tcp.bytes_received > 0) {
-        size_t copy_len = response->protocol_data.tcp.bytes_received;
-        if (copy_len >= buffer_size) copy_len = buffer_size - 1;
-        memcpy(buffer, response->body, copy_len);
-        buffer[copy_len] = '\0';
-    }
-
-    update_metrics(engine, response->response_time_us, response->success);
-    return result;
-}
-
-int engine_tcp_disconnect(engine_t* engine, int socket_fd, response_t* response) {
-    if (!engine || !response) return -1;
-
-    char host[256];
-    int port = 0;
-    if (tcp_lookup_by_fd(socket_fd, host, &port) < 0) {
-        memset(response, 0, sizeof(response_t));
-        response->protocol = PROTOCOL_TCP;
-        response->success = false;
-        response->status_code = 400;
-        strcpy(response->error_message, "socket_fd not found in TCP pool");
-        return -1;
-    }
-
-    /* tcp_disconnect() calls shutdown(SHUT_RDWR)+close() and marks is_connected=false.
-       Pool slot remains (is_connected=false). Subsequent send/receive will fail. */
-    int result = tcp_disconnect(host, port, response);
-
-    update_metrics(engine, response->response_time_us, response->success);
-    return result;
-}
-
-// UDP Socket functions
-int engine_udp_create_endpoint(engine_t* engine, const char* bind_address, int port, response_t* response) {
-    if (!engine || !response) return -1;
-    
-    const char* address = bind_address ? bind_address : "localhost";
-    
-    uint64_t start_time = get_time_us();
-    int result = udp_create_endpoint(address, port, response);
-    uint64_t end_time = get_time_us();
-    
-    // Set protocol and timing information
-    response->protocol = PROTOCOL_UDP;
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
-    update_metrics(engine, response->response_time_us, response->success);
-    
-    return result;
-}
-
-int engine_udp_send(engine_t* engine, int socket_fd, const char* data, size_t data_len, const char* dest_address, int dest_port, int timeout_ms, response_t* response) {
-    if (!engine || !data || !dest_address || !response) return -1;
-    
-    uint64_t start_time = get_time_us();
-    int result = udp_send(dest_address, dest_port, data, response);
-    uint64_t end_time = get_time_us();
-    
-    // Set protocol and timing information
-    response->protocol = PROTOCOL_UDP;
-    response->response_time_us = end_time - start_time;
-    
-    // Update metrics
-    update_metrics(engine, response->response_time_us, response->success);
-    
-    return result;
-}
-
-int engine_udp_receive(engine_t* engine, int socket_fd, char* buffer, size_t buffer_size, char* sender_address, int* sender_port, int timeout_ms, response_t* response) {
-    if (!engine || !buffer || !response) return -1;
-    (void)timeout_ms;
-
-    char host[256];
-    int port = 0;
-    if (udp_lookup_by_fd(socket_fd, host, &port) < 0) {
-        memset(response, 0, sizeof(response_t));
-        response->protocol = PROTOCOL_UDP;
-        response->success = false;
-        response->status_code = 400;
-        strcpy(response->error_message, "socket_fd not found in UDP pool");
-        return -1;
-    }
-
-    /* udp_receive() uses select() with 5s timeout; returns success=true/status 204
-       on timeout per CONTEXT.md. Populates protocol_data.udp with real byte count
-       and sender info. */
-    int result = udp_receive(host, port, response);
-
-    /* Copy received data into caller's buffer if provided. */
-    if (result == 0 && response->success && response->protocol_data.udp.bytes_received > 0) {
-        size_t copy_len = response->protocol_data.udp.bytes_received;
-        if (copy_len >= buffer_size) copy_len = buffer_size - 1;
-        memcpy(buffer, response->body, copy_len);
-        buffer[copy_len] = '\0';
-    }
-
-    /* Populate optional sender info output params if provided. */
-    if (sender_address) {
-        strncpy(sender_address, response->protocol_data.udp.sender_address, 255);
-        sender_address[255] = '\0';
-    }
-    if (sender_port) {
-        *sender_port = response->protocol_data.udp.sender_port;
-    }
-
-    update_metrics(engine, response->response_time_us, response->success);
-    return result;
-}
-
-int engine_udp_close_endpoint(engine_t* engine, int socket_fd, response_t* response) {
-    if (!engine || !response) return -1;
-
-    char host[256];
-    int port = 0;
-    if (udp_lookup_by_fd(socket_fd, host, &port) < 0) {
-        memset(response, 0, sizeof(response_t));
-        response->protocol = PROTOCOL_UDP;
-        response->success = false;
-        response->status_code = 400;
-        strcpy(response->error_message, "socket_fd not found in UDP pool");
-        return -1;
-    }
-
-    /* udp_close_endpoint() calls close(socket_fd) and marks is_bound=false.
-       Pool slot remains with is_bound=false. Subsequent receive will fail. */
-    int result = udp_close_endpoint(host, port, response);
-
-    update_metrics(engine, response->response_time_us, response->success);
-    return result;
-}
 
 int engine_convert_http_response(const response_t* generic_resp, http_response_t* http_resp) {
     if (!generic_resp || !http_resp) return -1;
@@ -530,102 +340,141 @@ static void update_metrics(engine_t* engine, uint64_t response_time_us, bool suc
     pthread_mutex_unlock(&engine->metrics_mutex);
 }
 
+/* Perform a single HTTP request with libcurl and fill `response` completely.
+   Shared by the synchronous path and both worker pools to avoid triplicating
+   the curl setup/teardown. On any setup failure the response is marked
+   unsuccessful with an explanatory error_message. */
+static void http_execute(const http_request_t* request, http_response_t* response) {
+    memset(response, 0, sizeof(http_response_t));
+
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        strncpy(response->error_message, "Failed to initialize CURL handle",
+                sizeof(response->error_message) - 1);
+        return;
+    }
+
+    response_buffer_t buffer = {0};
+    buffer.data = malloc(MAX_BODY_LENGTH);
+    if (!buffer.data) {
+        curl_easy_cleanup(curl);
+        strncpy(response->error_message, "Out of memory (body buffer)",
+                sizeof(response->error_message) - 1);
+        return;
+    }
+    buffer.capacity = MAX_BODY_LENGTH;
+    buffer.data[0] = '\0';
+
+    header_buffer_t headers = {0};
+    headers.data = malloc(MAX_HEADER_LENGTH);
+    if (!headers.data) {
+        free(buffer.data);
+        curl_easy_cleanup(curl);
+        strncpy(response->error_message, "Out of memory (header buffer)",
+                sizeof(response->error_message) - 1);
+        return;
+    }
+    headers.capacity = MAX_HEADER_LENGTH;
+    headers.data[0] = '\0';
+
+    uint64_t start_time = get_time_us();
+
+    curl_easy_setopt(curl, CURLOPT_URL, request->url);
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, request->timeout_ms > 0 ? request->timeout_ms : 30000);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+
+    if (strlen(request->body) > 0) {
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request->body);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(request->body));
+    }
+
+    struct curl_slist* header_list = NULL;
+    if (strlen(request->headers) > 0) {
+        char* header_copy = strdup(request->headers);
+        if (header_copy) {
+            char* token = strtok(header_copy, "\n");
+            while (token) {
+                header_list = curl_slist_append(header_list, token);
+                token = strtok(NULL, "\n");
+            }
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+            free(header_copy);
+        }
+    }
+
+    CURLcode res = curl_easy_perform(curl);
+    uint64_t response_time = get_time_us() - start_time;
+
+    long response_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+    response->status_code = response_code;
+    response->response_time_us = response_time;
+    response->success = (res == CURLE_OK && response_code >= 200 && response_code < 400);
+
+    if (buffer.size > 0) {
+        size_t copy_size = (buffer.size < MAX_BODY_LENGTH - 1) ? buffer.size : MAX_BODY_LENGTH - 1;
+        memcpy(response->body, buffer.data, copy_size);
+        response->body[copy_size] = '\0';
+    } else {
+        response->body[0] = '\0';
+    }
+
+    if (headers.size > 0) {
+        size_t copy_size = (headers.size < MAX_HEADER_LENGTH - 1) ? headers.size : MAX_HEADER_LENGTH - 1;
+        memcpy(response->headers, headers.data, copy_size);
+        response->headers[copy_size] = '\0';
+    } else {
+        response->headers[0] = '\0';
+    }
+
+    if (res != CURLE_OK) {
+        strncpy(response->error_message, curl_easy_strerror(res), sizeof(response->error_message) - 1);
+        response->error_message[sizeof(response->error_message) - 1] = '\0';
+    }
+
+    if (header_list) curl_slist_free_all(header_list);
+    curl_easy_cleanup(curl);
+    free(buffer.data);
+    free(headers.data);
+}
+
 static void* worker_thread_func(void* arg) {
     worker_thread_t* worker = (worker_thread_t*)arg;
     if (!worker || !worker->engine) {
         return NULL;
     }
-    
+
     engine_t* engine = worker->engine;
-    
+
     while (worker->active) {
         pthread_mutex_lock(&engine->queue_mutex);
-        
+
         while ((engine->queue_head == engine->queue_tail || engine->load_test_active) && !engine->shutdown) {
             pthread_cond_wait(&engine->queue_cond, &engine->queue_mutex);
         }
-        
+
         if (engine->shutdown) {
             pthread_mutex_unlock(&engine->queue_mutex);
             break;
         }
-        
+
         http_request_t request = engine->request_queue[engine->queue_head];
         engine->queue_head = (engine->queue_head + 1) % engine->queue_size;
-        
+
         pthread_mutex_unlock(&engine->queue_mutex);
-        
-        CURL* curl = curl_easy_init();
-        if (!curl) continue;
-        
-        response_buffer_t buffer = {0};
-        buffer.data = malloc(MAX_BODY_LENGTH);
-        if (!buffer.data) {
-            curl_easy_cleanup(curl);
-            continue;
-        }
-        buffer.capacity = MAX_BODY_LENGTH;
-        buffer.data[0] = '\0'; // Initialize as empty string
-        
-        header_buffer_t headers = {0};
-        headers.data = malloc(MAX_HEADER_LENGTH);
-        if (!headers.data) {
-            free(buffer.data);
-            curl_easy_cleanup(curl);
-            continue;
-        }
-        headers.capacity = MAX_HEADER_LENGTH;
-        headers.data[0] = '\0'; // Initialize as empty string
-        
-        uint64_t start_time = get_time_us();
-        
-        curl_easy_setopt(curl, CURLOPT_URL, request.url);
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request.method);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, request.timeout_ms);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-        
-        if (strlen(request.body) > 0) {
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request.body);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(request.body));
-        }
-        
-        struct curl_slist* header_list = NULL;
-        if (strlen(request.headers) > 0) {
-            char* header_copy = strdup(request.headers);
-            if (header_copy) {
-                char* token = strtok(header_copy, "\n");
-                while (token) {
-                    header_list = curl_slist_append(header_list, token);
-                    token = strtok(NULL, "\n");
-                }
-                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
-                free(header_copy);
-            }
-        }
-        
-        CURLcode res = curl_easy_perform(curl);
-        uint64_t end_time = get_time_us();
-        uint64_t response_time = end_time - start_time;
-        
-        long response_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-        
-        bool success = (res == CURLE_OK && response_code >= 200 && response_code < 400);
-        update_metrics(engine, response_time, success);
-        
-        if (header_list) {
-            curl_slist_free_all(header_list);
-        }
-        curl_easy_cleanup(curl);
-        free(buffer.data);
-        free(headers.data);
+
+        http_response_t response;
+        http_execute(&request, &response);
+        update_metrics(engine, response.response_time_us, response.success);
     }
-    
+
     return NULL;
 }
 
@@ -665,12 +514,10 @@ engine_t* engine_create(int max_connections, int worker_threads) {
     
     engine->queue_size = max_connections * 2;
     engine->request_queue = malloc(sizeof(http_request_t) * engine->queue_size);
-    engine->response_queue = malloc(sizeof(http_response_t) * engine->queue_size);
     engine->workers = malloc(sizeof(worker_thread_t) * worker_threads);
-    
-    if (!engine->request_queue || !engine->response_queue || !engine->workers) {
+
+    if (!engine->request_queue || !engine->workers) {
         free(engine->request_queue);
-        free(engine->response_queue);
         free(engine->workers);
         pthread_mutex_destroy(&engine->metrics_mutex);
         pthread_mutex_destroy(&engine->queue_mutex);
@@ -693,7 +540,6 @@ engine_t* engine_create(int max_connections, int worker_threads) {
                 pthread_join(engine->workers[j].thread, NULL);
             }
             free(engine->request_queue);
-            free(engine->response_queue);
             free(engine->workers);
             pthread_mutex_destroy(&engine->metrics_mutex);
             pthread_mutex_destroy(&engine->queue_mutex);
@@ -704,8 +550,15 @@ engine_t* engine_create(int max_connections, int worker_threads) {
             return NULL;
         }
     }
-    
+
     return engine;
+}
+
+/* Public wrapper so callers outside this translation unit (e.g. the Python
+   extension wrapping TCP/UDP/MQTT/Database calls) can fold a single operation
+   into the engine metrics. */
+void engine_record_metrics(engine_t* engine, uint64_t response_time_us, bool success) {
+    update_metrics(engine, response_time_us, success);
 }
 
 void engine_destroy(engine_t* engine) {
@@ -735,118 +588,15 @@ void engine_destroy(engine_t* engine) {
     
     free(engine->workers);
     free(engine->request_queue);
-    free(engine->response_queue);
     free(engine);
 }
 
 int engine_execute_request_sync(engine_t* engine, const http_request_t* request, http_response_t* response) {
     if (!engine || !request || !response) return -1;
-    
-    // Initialize response structure
-    memset(response, 0, sizeof(http_response_t));
-    
-    CURL* curl = curl_easy_init();
-    if (!curl) return -1;
-    
-    response_buffer_t buffer = {0};
-    buffer.data = malloc(MAX_BODY_LENGTH);
-    if (!buffer.data) {
-        curl_easy_cleanup(curl);
-        return -1;
-    }
-    buffer.capacity = MAX_BODY_LENGTH;
-    buffer.data[0] = '\0'; // Initialize as empty string
-    
-    header_buffer_t headers = {0};
-    headers.data = malloc(MAX_HEADER_LENGTH);
-    if (!headers.data) {
-        free(buffer.data);
-        curl_easy_cleanup(curl);
-        return -1;
-    }
-    headers.capacity = MAX_HEADER_LENGTH;
-    headers.data[0] = '\0'; // Initialize as empty string
-    
-    uint64_t start_time = get_time_us();
-    
-    curl_easy_setopt(curl, CURLOPT_URL, request->url);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
-    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, request->timeout_ms);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-    
-    if (strlen(request->body) > 0) {
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request->body);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(request->body));
-    }
-    
-    struct curl_slist* header_list = NULL;
-    if (strlen(request->headers) > 0) {
-        char* header_copy = strdup(request->headers);
-        if (header_copy) {
-            char* token = strtok(header_copy, "\n");
-            while (token) {
-                header_list = curl_slist_append(header_list, token);
-                token = strtok(NULL, "\n");
-            }
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
-            free(header_copy);
-        }
-    }
-    
-    CURLcode res = curl_easy_perform(curl);
-    uint64_t end_time = get_time_us();
-    uint64_t response_time = end_time - start_time;
-    
-    long response_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    
-    // Fill response structure safely
-    response->status_code = response_code;
-    response->response_time_us = response_time;
-    response->success = (res == CURLE_OK && response_code >= 200 && response_code < 400);
-    
-    // Copy response body safely
-    if (buffer.data && buffer.size > 0) {
-        size_t copy_size = (buffer.size < MAX_BODY_LENGTH - 1) ? buffer.size : MAX_BODY_LENGTH - 1;
-        memcpy(response->body, buffer.data, copy_size);
-        response->body[copy_size] = '\0';
-    } else {
-        response->body[0] = '\0';
-    }
-    
-    // Copy response headers safely
-    if (headers.data && headers.size > 0) {
-        size_t copy_size = (headers.size < MAX_HEADER_LENGTH - 1) ? headers.size : MAX_HEADER_LENGTH - 1;
-        memcpy(response->headers, headers.data, copy_size);
-        response->headers[copy_size] = '\0';
-    } else {
-        response->headers[0] = '\0';
-    }
-    
-    // Copy error message if there was an error
-    if (res != CURLE_OK) {
-        const char* error_str = curl_easy_strerror(res);
-        strncpy(response->error_message, error_str, sizeof(response->error_message) - 1);
-        response->error_message[sizeof(response->error_message) - 1] = '\0';
-    } else {
-        response->error_message[0] = '\0';
-    }
-    
-    // Update metrics
-    update_metrics(engine, response_time, response->success);
-    
-    if (header_list) {
-        curl_slist_free_all(header_list);
-    }
-    curl_easy_cleanup(curl);
-    free(buffer.data);
-    free(headers.data);
-    
+
+    http_execute(request, response);
+    update_metrics(engine, response->response_time_us, response->success);
+
     return 0;
 }
 
@@ -943,74 +693,10 @@ static void* load_test_worker_func(void* arg) {
         engine->queue_head = (engine->queue_head + 1) % engine->queue_size;
         pthread_mutex_unlock(&engine->queue_mutex);
 
-        http_response_t response;
-        memset(&response, 0, sizeof(response));
-
-        CURL* curl = curl_easy_init();
-        if (!curl) {
-            pthread_mutex_lock(&engine->metrics_mutex);
-            engine->metrics.failed_requests++;
-            pthread_mutex_unlock(&engine->metrics_mutex);
-            continue;
-        }
-
-        response_buffer_t buffer = {0};
-        buffer.data = malloc(MAX_BODY_LENGTH);
-        if (!buffer.data) { curl_easy_cleanup(curl); continue; }
-        buffer.capacity = MAX_BODY_LENGTH;
-        buffer.data[0] = '\0';
-
-        header_buffer_t headers = {0};
-        headers.data = malloc(MAX_HEADER_LENGTH);
-        if (!headers.data) { free(buffer.data); curl_easy_cleanup(curl); continue; }
-        headers.capacity = MAX_HEADER_LENGTH;
-        headers.data[0] = '\0';
-
-        uint64_t start_us = get_time_us();
-
-        curl_easy_setopt(curl, CURLOPT_URL, request.url);
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request.method);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, request.timeout_ms > 0 ? request.timeout_ms : 30000);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-
-        if (strlen(request.body) > 0) {
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request.body);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(request.body));
-        }
-
-        struct curl_slist* header_list = NULL;
-        if (strlen(request.headers) > 0) {
-            char* header_copy = strdup(request.headers);
-            if (header_copy) {
-                char* token = strtok(header_copy, "\n");
-                while (token) {
-                    header_list = curl_slist_append(header_list, token);
-                    token = strtok(NULL, "\n");
-                }
-                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
-                free(header_copy);
-            }
-        }
-
-        CURLcode res = curl_easy_perform(curl);
         /* stop_flag=1 does not abort an in-flight perform; it only prevents the next request */
-        uint64_t response_time = get_time_us() - start_us;
-
-        long response_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-        bool success = (res == CURLE_OK && response_code >= 200 && response_code < 400);
-        update_metrics(engine, response_time, success);
-
-        if (header_list) curl_slist_free_all(header_list);
-        curl_easy_cleanup(curl);
-        free(buffer.data);
-        free(headers.data);
+        http_response_t response;
+        http_execute(&request, &response);
+        update_metrics(engine, response.response_time_us, response.success);
     }
 
     return NULL;

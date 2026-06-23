@@ -184,18 +184,13 @@ int engine_websocket_close(engine_t* engine, const char* url, response_t* respon
 // Database specific functions (stubs for now)
 int engine_database_connect(engine_t* engine, const char* connection_string, const char* db_type, response_t* response);
 int engine_database_query(engine_t* engine, const char* connection_string, const char* query, response_t* response);
+int engine_database_disconnect(engine_t* engine, const char* connection_string, response_t* response);
 
-// TCP Socket functions
-int engine_tcp_connect(engine_t* engine, const char* hostname, int port, int timeout_ms, response_t* response);
-int engine_tcp_send(engine_t* engine, int socket_fd, const char* data, size_t data_len, int timeout_ms, response_t* response);
-int engine_tcp_receive(engine_t* engine, int socket_fd, char* buffer, size_t buffer_size, int timeout_ms, response_t* response);
-int engine_tcp_disconnect(engine_t* engine, int socket_fd, response_t* response);
-
-// UDP Socket functions
-int engine_udp_create_endpoint(engine_t* engine, const char* bind_address, int port, response_t* response);
-int engine_udp_send(engine_t* engine, int socket_fd, const char* data, size_t data_len, const char* dest_address, int dest_port, int timeout_ms, response_t* response);
-int engine_udp_receive(engine_t* engine, int socket_fd, char* buffer, size_t buffer_size, char* sender_address, int* sender_port, int timeout_ms, response_t* response);
-int engine_udp_close_endpoint(engine_t* engine, int socket_fd, response_t* response);
+/* NOTE: TCP/UDP are bridged to Python at the protocol level (tcp.c/udp.c
+   functions are called directly by the extension and metrics are folded in
+   via engine_record_metrics). The former fd-based engine TCP and UDP
+   wrappers were removed: they were unreachable and relied on a racy
+   fd-to-host lookup. */
 
 // MQTT Message Queue functions
 int engine_mqtt_connect(engine_t* engine, const char* host, int port, const char* client_id, 
@@ -211,6 +206,11 @@ int engine_mqtt_disconnect(engine_t* engine, const char* host, int port, const c
 // Metrics and utilities
 void engine_get_metrics(engine_t* engine, metrics_t* metrics);
 void engine_reset_metrics(engine_t* engine);
+
+/* Record a single operation into the engine metrics (thread-safe).
+   Exposed so the Python extension can wrap protocol-level calls (TCP/UDP/etc.)
+   that are not routed through the HTTP request queue. */
+void engine_record_metrics(engine_t* engine, uint64_t response_time_us, bool success);
 
 // Helper functions for protocol detection and conversion
 protocol_type_t engine_detect_protocol(const char* url);

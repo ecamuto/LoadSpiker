@@ -51,12 +51,26 @@ recording metrics) runs in C, while test authoring stays in ergonomic Python.
 
 ### Life of a load test
 
-`engine.run_scenario(scenario, users, duration)` → `scenario.build_requests()`
-produces a list of request dicts → `start_load_test` copies them into the C
-request queue, spawns up to `min(users, num_requests)` **per-test worker
-threads** (`load_test_worker_func`), waits for the queue to drain (or a hard
-timeout of `duration + 5s`), then joins the workers. Metrics are read back with
-`get_metrics()`.
+`engine.run_scenario(scenario, users, duration)` branches on
+`scenario.is_http_only()`:
+
+- **HTTP-only** → `scenario.build_requests()` produces request dicts →
+  `start_load_test` copies them into the C request queue, spawns up to
+  `min(users, num_requests)` **per-test worker threads** (`load_test_worker_func`),
+  waits for the queue to drain (or a hard timeout of `duration + 5s`), then joins.
+- **Protocol scenarios** (TCP/UDP/MQTT/Database/Mixed) → `_run_protocol_load_test`
+  spawns one Python thread per virtual user; each thread repeatedly runs the
+  scenario’s `get_load_operations(user_id)` list for `duration`, dispatching each
+  op through `_execute_operation` to the (C-bridged) per-op engine methods.
+  Metrics are still recorded inside the C engine via `engine_record_metrics`.
+
+Either way, metrics are read back with `get_metrics()`.
+
+> **Known limitation:** the protocol connection pools are keyed by `host:port`
+> (not per virtual user), so multiple users targeting the same endpoint share a
+> pool slot and their connect/send/receive/disconnect calls can interleave —
+> some operations will legitimately fail under high user counts. Per-user
+> connection isolation is a future improvement.
 
 ---
 
@@ -273,6 +287,10 @@ where relevant.
 - C extension now bridges **all** protocols (TCP/UDP/MQTT/Database) — previously
   only HTTP + WebSocket were exposed, so every other `engine.*` call raised
   `AttributeError` when the C extension was active.
+- `run_scenario` now **executes non-HTTP scenarios under load** via
+  `_run_protocol_load_test` + `_execute_operation`. Previously the load path
+  only ran HTTP requests, so TCP/UDP/MQTT/Database/Mixed scenario operations
+  were built but never executed.
 - Reference-counting leak in every response/metrics dict fixed via `dict_set`.
 - MQTT packet encoders bounds-checked (stack overflow class). (V1–V3)
 - `shutdown`/`active` made atomic; TSan clean. (V4)

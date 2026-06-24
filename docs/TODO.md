@@ -93,13 +93,26 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 - [ ] 🟡 **Coarse ramp-up.** `engine.py:_run_with_ramp_up` re-runs
       `start_load_test` in 5 s bursts with `sleep(1)`. Consider driving ramp in
       the C core for smoother granularity.
-- [ ] 🟡 **Consolidate root-level `test_*.py` scripts.** ~17 ad-hoc scripts sit
-      in the repo root alongside the real `tests/` suite. Fold the useful ones
-      into `tests/`, delete the rest.
+- [x] 🟡 **Consolidate root-level `test_*.py` scripts.** Removed all 14 root
+      `test_*.py` plus the orphaned `test_csv_data.csv`. None were real tests:
+      every one was an early `__main__` demo/smoke script that printed instead of
+      asserting (broad `try/except` swallowed failures) and/or hit
+      `httpbin.org`. The `tests/` suite supersedes them. Purpose-written
+      assertions / data-driven / WebSocket unit tests (the genuine coverage gaps)
+      are left as a follow-up rather than salvaging the scratch scripts.
 
 ---
 
 ## 6. Verification gaps
+
+- [ ] 🟠 **Flaky TCP/UDP pool tests (pre-existing).** `tests/` passes on a fresh
+      run but `TestTCPProtocol::test_tcp_send_receive` (and sibling socket tests)
+      fail intermittently on repeated runs — present at HEAD, **not** introduced
+      by the root-script cleanup. Root cause: the C TCP/UDP/MQTT connection pools
+      are process-global statics and tests connect without always disconnecting,
+      so slots accumulate within a run. This will make CI flaky; fix with
+      per-test teardown (disconnect/cleanup) or a pool-reset hook. Reproduce: run
+      `pytest tests/` 3× in a row.
 
 - [x] 🟠 **Run AddressSanitizer.** Done. `make test-asan` now builds a standalone
       natively-instrumented harness (`tests/asan_check.c`, mirroring the tsan

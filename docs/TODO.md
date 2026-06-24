@@ -114,7 +114,13 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       compiles again.
 - [ ] 🟡 **Regression tests for security fixes.** Add tests for MQTT over-length
       rejection (V1–V3), the refcount-leak fix (V9), and ephemeral UDP port.
-- [ ] 🟡 **CI.** No CI config; add one that runs `make test` + `make tsan`.
+- [x] 🟡 **CI.** Added `.github/workflows/ci.yml` (ubuntu, Python 3.13): installs
+      libcurl/libpq, builds the extension in place, runs `pytest`, then `make
+      tsan` and `make test-asan`. Also fixed a malformed `requirements.txt`
+      (`pkgconfig>=1.5.0pytest` on one line → an invalid specifier that broke
+      `pip install -r`); now `pkgconfig` / `pytest` / `requests` on separate
+      lines. Verified locally: 211 passed, 2 skipped (PostgreSQL + one
+      network-gated test).
 
 ---
 

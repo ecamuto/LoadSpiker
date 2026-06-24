@@ -170,10 +170,15 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       pending" / "Phase 1 simulation" notices). Also corrected the
       [README](../README.md) matrix itself, which still claimed WebSocket/Database
       were simulated and TCP truncated binary/NUL payloads (fixed by V6).
-- [ ] 🟡 Reconcile [docs/API.md](API.md), [docs/CODE_ANALYSIS.md](CODE_ANALYSIS.md),
-      [docs/ROADMAP.md](ROADMAP.md), [CHANGELOG.md](../CHANGELOG.md), and the
-      short [CONTRIBUTING.md](../CONTRIBUTING.md) with the current state and the
-      new [Contributor Guide](CONTRIBUTOR_GUIDE.md).
+- [x] 🟡 Reconciled [docs/API.md](API.md), [docs/CODE_ANALYSIS.md](CODE_ANALYSIS.md),
+      [docs/ROADMAP.md](ROADMAP.md), and [CHANGELOG.md](../CHANGELOG.md) with the
+      current state. CODE_ANALYSIS no longer calls WebSocket/Database "simulated"
+      (now real WS via libcurl / real PostgreSQL via libpq) and flags that SQL
+      injection is relevant for real `PQexec`; CHANGELOG gained the unreleased
+      work (real WS/PG, ramp-in-C, ASan harness, CI, security fixes); API.md
+      notes the PostgreSQL-real / MySQL·Mongo-simulated split; ROADMAP fixes the
+      protocol-capability lines and a dead `test_websocket.py` reference.
+      [CONTRIBUTING.md](../CONTRIBUTING.md) had no stale capability claims.
 
 ---
 

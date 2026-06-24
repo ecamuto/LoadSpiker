@@ -121,6 +121,10 @@ Connect to a database for load testing.
 - `connection_string` (str): Database connection string (e.g., "mysql://user:pass@host:port/database")
 - `db_type` (str): Database type ("mysql", "postgresql", "mongodb", or "auto" to detect from URL)
 
+> **Capability:** PostgreSQL connects/queries for real via libpq when built with
+> `HAVE_LIBPQ`; MySQL and MongoDB are simulated (connection-pool and query-timing
+> only). Connections are isolated per virtual user via `conn_id`.
+
 **Returns:**
 Dictionary containing connection response data including success status, response time, and connection details.
 

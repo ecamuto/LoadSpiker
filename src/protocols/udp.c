@@ -157,7 +157,7 @@ int udp_create_endpoint(const char* host, int port, const char* conn_id, respons
     return 0;
 }
 
-int udp_send(const char* host, int port, const char* conn_id, const char* data, response_t* response) {
+int udp_send(const char* host, int port, const char* conn_id, const char* data, size_t data_len, response_t* response) {
     if (!host || port <= 0 || !data || !response) {
         return -1;
     }
@@ -208,7 +208,7 @@ int udp_send(const char* host, int port, const char* conn_id, const char* data, 
         return -1;
     }
 
-    ssize_t bytes_sent = sendto(fd, data, strlen(data), 0, res->ai_addr, res->ai_addrlen);
+    ssize_t bytes_sent = sendto(fd, data, data_len, 0, res->ai_addr, res->ai_addrlen);
     freeaddrinfo(res);
 
     if (bytes_sent < 0) {
@@ -244,6 +244,7 @@ int udp_receive(const char* host, int port, const char* conn_id, response_t* res
     pthread_mutex_lock(&udp_pool_mutex);
     udp_endpoint_t* ep = udp_find_locked(host, port, conn_id);
     int fd = (ep && ep->is_bound) ? ep->socket_fd : -1;
+    bool needs_bind = (fd >= 0) && !ep->local_bound;
     pthread_mutex_unlock(&udp_pool_mutex);
 
     if (fd < 0) {
@@ -253,13 +254,21 @@ int udp_receive(const char* host, int port, const char* conn_id, response_t* res
         return -1;
     }
 
-    // Bind to the local port for receiving (best-effort; may already be bound).
-    struct sockaddr_in local_addr;
-    memset(&local_addr, 0, sizeof(local_addr));
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = htons(port);
-    bind(fd, (struct sockaddr*)&local_addr, sizeof(local_addr));
+    // Bind to the local port for receiving — only once per endpoint. Repeated
+    // binds on the same socket are rejected by the OS anyway; track it so we
+    // don't issue a failing bind() on every receive.
+    if (needs_bind) {
+        struct sockaddr_in local_addr;
+        memset(&local_addr, 0, sizeof(local_addr));
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_addr.s_addr = INADDR_ANY;
+        local_addr.sin_port = htons(port);
+        if (bind(fd, (struct sockaddr*)&local_addr, sizeof(local_addr)) == 0) {
+            pthread_mutex_lock(&udp_pool_mutex);
+            if (ep->socket_fd == fd) ep->local_bound = true;
+            pthread_mutex_unlock(&udp_pool_mutex);
+        }
+    }
 
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
@@ -329,6 +338,7 @@ int udp_close_endpoint(const char* host, int port, const char* conn_id, response
         fd = ep->socket_fd;
         ep->socket_fd = -1;
         ep->is_bound = false;
+        ep->local_bound = false;
     }
     pthread_mutex_unlock(&udp_pool_mutex);
 

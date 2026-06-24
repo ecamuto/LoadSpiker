@@ -260,10 +260,10 @@ int engine_websocket_close(engine_t* engine, const char* url, response_t* respon
     return websocket_close_connection(url, response);
 }
 
-int engine_database_connect(engine_t* engine, const char* connection_string, const char* db_type, response_t* response) {
+int engine_database_connect(engine_t* engine, const char* connection_string, const char* conn_id, const char* db_type, response_t* response) {
     if (!engine || !connection_string || !db_type || !response) return -1;
-    
-    int result = database_connect(connection_string, db_type, response);
+
+    int result = database_connect(connection_string, conn_id, db_type, response);
     
     // Update metrics for database operations
     update_metrics(engine, response->response_time_us, response->success);
@@ -271,10 +271,10 @@ int engine_database_connect(engine_t* engine, const char* connection_string, con
     return result;
 }
 
-int engine_database_query(engine_t* engine, const char* connection_string, const char* query, response_t* response) {
+int engine_database_query(engine_t* engine, const char* connection_string, const char* conn_id, const char* query, response_t* response) {
     if (!engine || !connection_string || !query || !response) return -1;
-    
-    int result = database_execute_query(connection_string, query, response);
+
+    int result = database_execute_query(connection_string, conn_id, query, response);
 
     // Update metrics for database operations
     update_metrics(engine, response->response_time_us, response->success);
@@ -282,10 +282,10 @@ int engine_database_query(engine_t* engine, const char* connection_string, const
     return result;
 }
 
-int engine_database_disconnect(engine_t* engine, const char* connection_string, response_t* response) {
+int engine_database_disconnect(engine_t* engine, const char* connection_string, const char* conn_id, response_t* response) {
     if (!engine || !connection_string || !response) return -1;
 
-    int result = database_disconnect(connection_string, response);
+    int result = database_disconnect(connection_string, conn_id, response);
 
     update_metrics(engine, response->response_time_us, response->success);
 

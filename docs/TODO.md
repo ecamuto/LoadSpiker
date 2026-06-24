@@ -14,13 +14,15 @@ Audit of `authentication.py`, `session_manager.py`, `data_sources.py`,
 `reporters.py`, `cli.py`, `utils.py`, `assertions.py`,
 `performance_assertions.py`.
 
+**Status: P1–P5 all fixed this pass** (see [Done this pass](#done-this-pass-for-context)).
+
 | ID | Sev | Location | Issue | Suggested fix |
 | -- | --- | -------- | ----- | ------------- |
-| P1 | 🟠 | [data_sources.py:98-125](../loadspiker/data_sources.py#L98) | **Silent CSV type coercion corrupts string data.** `value.isdigit()`→int, `'.' in value`→float, `"true"/"false"`→bool. Leading-zero IDs (`"007"`→7), zip codes (`"01234"`→1234), version strings (`"1.10"`→1.1), `"false"`→bool. Data-driven request parameters are mangled with no opt-out. | Make coercion opt-in (`coerce_types=False` default), or never coerce values with leading zeros, or keep raw strings and let scenarios cast explicitly. |
-| P2 | 🟡 | [authentication.py:440-500](../loadspiker/authentication.py#L440) | OAuth2 `state` is generated and stored but **never validated** on code exchange — the CSRF value is unused. | Compare returned `state` against `session.get('oauth2_state')` before exchanging the code. |
-| P3 | 🟡 | [authentication.py:193](../loadspiker/authentication.py#L193) | Bearer `_fetch_token_from_endpoint` returns the **full `token_response`** (access + refresh tokens) in its result dict; logging the result leaks secrets. OAuth2 flow truncates its token (inconsistent). | Drop or redact `token_response` from the returned dict; expose only metadata (`expires_in`, `has_refresh_token`). |
-| P4 | 🟡 | [reporters.py:233](../loadspiker/reporters.py#L233) | HTMLReporter embeds `json.dumps(progress_data)` in a `<script>` block and metrics via f-string. **Currently safe** (only numeric data flows in), but no escaping / `</script>` handling — latent XSS if any string field (URL/error/body) is ever added to the report. | Escape with `</` → `<\/` in the JSON dump and HTML-escape any string fields before interpolation, as defense-in-depth. |
-| P5 | 🟡 | [cli.py:152-167](../cli.py#L152) | Config access `config['base_url']` / `req_config['url']` is unguarded → a missing key surfaces as a generic "Test failed" rather than a clear message. | Validate required keys and emit a specific error. |
+| ✅ P1 | 🟠 | [data_sources.py:98-125](../loadspiker/data_sources.py#L98) | **Silent CSV type coercion corrupts string data.** `value.isdigit()`→int, `'.' in value`→float, `"true"/"false"`→bool. Leading-zero IDs (`"007"`→7), zip codes (`"01234"`→1234), version strings (`"1.10"`→1.1), `"false"`→bool. Data-driven request parameters are mangled with no opt-out. | Make coercion opt-in (`coerce_types=False` default), or never coerce values with leading zeros, or keep raw strings and let scenarios cast explicitly. |
+| ✅ P2 | 🟡 | [authentication.py:440-500](../loadspiker/authentication.py#L440) | OAuth2 `state` is generated and stored but **never validated** on code exchange — the CSRF value is unused. | Compare returned `state` against `session.get('oauth2_state')` before exchanging the code. |
+| ✅ P3 | 🟡 | [authentication.py:193](../loadspiker/authentication.py#L193) | Bearer `_fetch_token_from_endpoint` returns the **full `token_response`** (access + refresh tokens) in its result dict; logging the result leaks secrets. OAuth2 flow truncates its token (inconsistent). | Drop or redact `token_response` from the returned dict; expose only metadata (`expires_in`, `has_refresh_token`). |
+| ✅ P4 | 🟡 | [reporters.py:233](../loadspiker/reporters.py#L233) | HTMLReporter embeds `json.dumps(progress_data)` in a `<script>` block and metrics via f-string. **Currently safe** (only numeric data flows in), but no escaping / `</script>` handling — latent XSS if any string field (URL/error/body) is ever added to the report. | Escape with `</` → `<\/` in the JSON dump and HTML-escape any string fields before interpolation, as defense-in-depth. |
+| ✅ P5 | 🟡 | [cli.py:152-167](../cli.py#L152) | Config access `config['base_url']` / `req_config['url']` is unguarded → a missing key surfaces as a generic "Test failed" rather than a clear message. | Validate required keys and emit a specific error. |
 
 **Verified clean:** `session_manager.py` (properly `RLock`-guarded, no lock
 inversion); no `eval`/`exec`/`pickle`/`yaml.load`/`shell=True`/`verify=False`
@@ -33,43 +35,54 @@ have no risky patterns.
 
 From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 
-- [ ] 🟠 **V6 — binary payload truncation.** `tcp_send`/`udp_send` use
-      `strlen(data)`; the extension marshals `data` as a `str`. Payloads with
-      embedded NULs are truncated. Needs length-carrying (`y#`) marshalling and
-      signature changes through to the protocol functions.
-- [ ] 🟡 **V8 — MQTT control-packet partial reads.** CONNACK/SUBACK/UNSUBACK use
-      a single `recv()`; a split TCP segment yields a false failure. Add a
-      read-to-length loop.
-- [ ] 🟡 **V11 — UDP re-`bind()` on every receive.** `udp_receive` still calls
-      `bind()` each call (best-effort, ignored after the first). Bind once at
-      endpoint creation.
-- [ ] 🟡 **V14 — DB result aliases the union via `char[]` cast.** Benign today
-      (union is large enough) but fragile; write through the named union member.
+**Status: V6, V8, V11, V14 all fixed this pass.**
+
+- [x] 🟠 **V6 — binary payload truncation.** Fixed: extension marshals `data`
+      with `s*` (accepts `str` and `bytes`, carries length); `tcp_send`/`udp_send`
+      now take a `size_t data_len` and no longer call `strlen(data)`. Binary
+      payloads with embedded NULs send in full (verified by NUL roundtrip).
+- [x] 🟡 **V8 — MQTT control-packet partial reads.** Fixed: added
+      `mqtt_recv_full()` read-to-length loop; CONNACK/SUBACK/UNSUBACK use it and
+      reject short reads.
+- [x] 🟡 **V11 — UDP re-`bind()` on every receive.** Fixed: endpoint tracks a
+      `local_bound` flag; `udp_receive` binds at most once per endpoint.
+- [x] 🟡 **V14 — DB result aliases the union via `char[]` cast.** Fixed: both
+      writer (`database.c`) and reader (`python_extension.c`) use the named
+      `protocol_data.database` union member.
 
 ---
 
 ## 3. Concurrency / performance follow-ups
 
-- [ ] 🟠 **MQTT & Database lock narrowing.** TCP/UDP now release the pool mutex
-      during blocking I/O; MQTT (`mqtt_connect` blocking `connect`/`recv`) and
-      Database (`usleep` under `db_pool_mutex`) still hold their pool mutex
-      across the whole operation, serializing those protocols process-wide.
-      Apply the same find/reserve-then-unlock pattern.
-- [ ] 🟡 **Per-user Database isolation.** DB connections are keyed by
-      `connection_string`, shared across virtual users; one user's disconnect
-      flips `is_connected` for all. (Simulated backend, so low impact today.)
+- [x] 🟠 **MQTT & Database lock narrowing.** Fixed: MQTT
+      connect/publish/subscribe/unsubscribe now find/reserve under the pool
+      mutex then release it before blocking `connect`/`send`/`recv` (added
+      `mqtt_find_or_reserve_locked`; reserved slots are never removed, so the
+      slot pointer stays valid after unlock; send/recv failures re-lock only to
+      flip `is_connected`). Database `execute_query` releases `db_pool_mutex`
+      before the simulated `usleep`.
+- [x] 🟡 **Per-user Database isolation.** Fixed: DB connections are now keyed by
+      `(connection_string, conn_id)`; `conn_id` is threaded through
+      `database_*` / `engine_database_*` / the extension / `engine.py`
+      (default `"default"`). One user's disconnect no longer flips
+      `is_connected` for others (verified).
 
 ---
 
 ## 4. Functional gaps
 
-- [ ] 🔴 **WebSocket is simulated.** `websocket.c` does `usleep`-based fake
-      handshakes/sends — no real RFC 6455 frames. Implement real WS (or wire
-      libcurl's WebSocket API).
-- [ ] 🔴 **Database is simulated.** `database.c` parses connection strings and
-      returns canned results; no real driver is linked.
-- [ ] 🟡 `websocket.c` uses `gettimeofday` (wall clock) while everything else
-      uses `get_time_us()` (monotonic). Unify.
+- [x] 🔴 **WebSocket is real.** `websocket.c` now does real RFC 6455 frames via
+      libcurl's WebSocket API (`curl_ws_send`/`curl_ws_recv`, `CONNECT_ONLY=2`),
+      gated by `HAVE_CURL_WEBSOCKETS` (falls back to the simulated path where
+      libcurl lacks WS). The extension's WS methods now release the GIL during
+      I/O. Verified end-to-end against a local RFC 6455 echo server (new
+      `mock_websocket_server` fixture).
+- [x] 🔴 **Database: real PostgreSQL.** `database.c` connects/queries real
+      PostgreSQL via libpq (`PQconnectdb`/`PQexec`), gated by `HAVE_LIBPQ`.
+      MySQL/MongoDB remain simulated (no client linked). Real connect verified
+      against a live server; PG tests skip when none is reachable.
+- [x] 🟡 `websocket.c` clock unified to the shared monotonic `get_time_us()`
+      (removed the local `gettimeofday` helper).
 
 ---
 
@@ -120,3 +133,19 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 - TCP/UDP per-user connection isolation + lock-narrowed I/O (no shared sockets;
   no process-wide serialization).
 - New docs: README rewrite, Contributor Guide, Security Audit, this backlog.
+- Python-layer audit P1–P5 fixed: CSV coercion now opt-in & leading-zero-safe
+  (P1); OAuth2 `state` validated on code exchange (P2); Bearer result redacts
+  raw `token_response` (P3); HTMLReporter escapes `</` in `<script>` (P4); CLI
+  config validates required `base_url`/`url` keys (P5).
+- C audit V6/V8/V11/V14 fixed: length-carrying TCP/UDP send for binary payloads
+  (V6); MQTT read-to-length loop (V8); UDP binds once per endpoint (V11); DB
+  response uses the named union member (V14).
+- Concurrency follow-ups fixed: MQTT (connect/publish/subscribe/unsubscribe) and
+  Database (`execute_query` usleep) now narrow the pool mutex to the lookup, no
+  longer serializing those protocols process-wide; DB connections are isolated
+  per virtual user via `conn_id`.
+- Functional gaps closed (§4): real RFC 6455 WebSocket via libcurl's WS API
+  (GIL released during I/O); real PostgreSQL via libpq (MySQL/Mongo still sim);
+  websocket.c clock unified to monotonic `get_time_us()`. setup.py now detects
+  libcurl via curl-config and libpq via pg_config, defining `HAVE_CURL_WEBSOCKETS`
+  / `HAVE_LIBPQ` so the build degrades gracefully where those are absent.

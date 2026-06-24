@@ -48,17 +48,24 @@ class TestDatabaseProtocol(unittest.TestCase):
         print(f"   📄 Response: {response['body']}")
     
     def test_postgresql_connection(self):
-        """Test PostgreSQL database connection"""
+        """Test PostgreSQL database connection (real libpq; needs a live server)"""
         print("\n🔗 Testing PostgreSQL Connection...")
-        
-        connection_string = "postgresql://testuser:testpass@localhost:5432/testdb"
-        
+
+        connection_string = os.environ.get(
+            "LOADSPIKER_TEST_PG",
+            "postgresql://testuser:testpass@localhost:5432/testdb",
+        )
+
         response = self.engine.database_connect(connection_string, "postgresql")
-        
-        self.assertTrue(response['success'])
+
+        if not response['success']:
+            # Real driver: no reachable server -> reports a PostgreSQL error.
+            self.assertIn("PostgreSQL", response.get('error_message', ''))
+            self.skipTest("No PostgreSQL server reachable for real libpq test")
+
         self.assertEqual(response['status_code'], 200)
         self.assertIn("Connected to postgresql database", response['body'])
-        
+
         print(f"   ✅ PostgreSQL connection successful in {response['response_time_us']/1000:.2f}ms")
         print(f"   📄 Response: {response['body']}")
     
@@ -86,10 +93,14 @@ class TestDatabaseProtocol(unittest.TestCase):
         self.assertTrue(response['success'])
         self.assertIn("mysql", response['body'])
         
-        # Test PostgreSQL auto-detection
+        # Test PostgreSQL auto-detection. PostgreSQL uses the real libpq driver,
+        # so success requires a live server; either way the response confirms the
+        # postgresql driver was selected (success body or PG error message).
         response = self.engine.database_connect("postgresql://user:pass@host/db", "auto")
-        self.assertTrue(response['success'])
-        self.assertIn("postgresql", response['body'])
+        if response['success']:
+            self.assertIn("postgresql", response['body'])
+        else:
+            self.assertIn("PostgreSQL", response.get('error_message', ''))
         
         # Test MongoDB auto-detection
         response = self.engine.database_connect("mongodb://user:pass@host/db", "auto")

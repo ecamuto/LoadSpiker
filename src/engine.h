@@ -182,9 +182,9 @@ int engine_websocket_send(engine_t* engine, const char* url, const char* message
 int engine_websocket_close(engine_t* engine, const char* url, response_t* response);
 
 // Database specific functions (stubs for now)
-int engine_database_connect(engine_t* engine, const char* connection_string, const char* db_type, response_t* response);
-int engine_database_query(engine_t* engine, const char* connection_string, const char* query, response_t* response);
-int engine_database_disconnect(engine_t* engine, const char* connection_string, response_t* response);
+int engine_database_connect(engine_t* engine, const char* connection_string, const char* conn_id, const char* db_type, response_t* response);
+int engine_database_query(engine_t* engine, const char* connection_string, const char* conn_id, const char* query, response_t* response);
+int engine_database_disconnect(engine_t* engine, const char* connection_string, const char* conn_id, response_t* response);
 
 /* NOTE: TCP/UDP are bridged to Python at the protocol level (tcp.c/udp.c
    functions are called directly by the extension and metrics are folded in

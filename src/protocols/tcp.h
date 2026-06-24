@@ -31,7 +31,8 @@ typedef struct {
 // targeting the same host:port get isolated sockets. Pass "default" (or "") for
 // single-user / direct use.
 int tcp_connect(const char* host, int port, const char* conn_id, response_t* response);
-int tcp_send(const char* host, int port, const char* conn_id, const char* data, response_t* response);
+// data_len lets binary payloads with embedded NULs through (no strlen()).
+int tcp_send(const char* host, int port, const char* conn_id, const char* data, size_t data_len, response_t* response);
 int tcp_receive(const char* host, int port, const char* conn_id, response_t* response);
 int tcp_disconnect(const char* host, int port, const char* conn_id, response_t* response);
 

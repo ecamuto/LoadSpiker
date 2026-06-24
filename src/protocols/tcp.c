@@ -210,7 +210,7 @@ int tcp_connect(const char* host, int port, const char* conn_id, response_t* res
     return 0;
 }
 
-int tcp_send(const char* host, int port, const char* conn_id, const char* data, response_t* response) {
+int tcp_send(const char* host, int port, const char* conn_id, const char* data, size_t data_len, response_t* response) {
     if (!host || port <= 0 || !data || !response) {
         return -1;
     }
@@ -233,8 +233,8 @@ int tcp_send(const char* host, int port, const char* conn_id, const char* data, 
         return -1;
     }
 
-    /* Blocking send loop runs without the pool mutex. */
-    size_t data_len = strlen(data);
+    /* Blocking send loop runs without the pool mutex. data_len is carried from
+       the caller so binary payloads with embedded NULs are sent in full. */
     size_t total_sent = 0;
     while (total_sent < data_len) {
         ssize_t bytes_sent = send(fd, data + total_sent, data_len - total_sent, 0);

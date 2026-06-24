@@ -13,9 +13,12 @@ typedef enum {
     DB_TYPE_UNKNOWN
 } db_type_t;
 
+#define MAX_DB_CONN_ID_LENGTH 64
+
 // Database connection structure
 typedef struct {
     char connection_string[MAX_URL_LENGTH];
+    char conn_id[MAX_DB_CONN_ID_LENGTH]; // per-virtual-user key; "default" for single-user
     db_type_t type;
     void* connection_handle;
     bool is_connected;
@@ -32,10 +35,13 @@ typedef struct {
     bool has_result_set;
 } database_data_t;
 
-// Function declarations
-int database_connect(const char* connection_string, const char* db_type, response_t* response);
-int database_execute_query(const char* connection_string, const char* query, response_t* response);
-int database_disconnect(const char* connection_string, response_t* response);
+// Function declarations.
+// conn_id identifies the logical owner (one virtual user) so concurrent users
+// sharing a connection_string get isolated connection state. Pass "default"
+// (or "") for single-user / direct use.
+int database_connect(const char* connection_string, const char* conn_id, const char* db_type, response_t* response);
+int database_execute_query(const char* connection_string, const char* conn_id, const char* query, response_t* response);
+int database_disconnect(const char* connection_string, const char* conn_id, response_t* response);
 
 // Helper functions
 db_type_t database_parse_type(const char* db_type_str);

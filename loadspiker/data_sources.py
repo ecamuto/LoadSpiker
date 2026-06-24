@@ -53,14 +53,20 @@ class DataSource(ABC):
 class CSVDataSource(DataSource):
     """CSV file data source"""
     
-    def __init__(self, file_path: str, name: str = "data", 
+    def __init__(self, file_path: str, name: str = "data",
                  encoding: str = "utf-8", delimiter: str = ",",
-                 skip_empty_rows: bool = True):
+                 skip_empty_rows: bool = True, coerce_types: bool = False):
         super().__init__(name)
         self.file_path = file_path
         self.encoding = encoding
         self.delimiter = delimiter
         self.skip_empty_rows = skip_empty_rows
+        # Type coercion is opt-in: by default CSV values are kept as raw
+        # strings so leading-zero IDs ("007"), zip codes ("01234"), and
+        # version strings ("1.10") are not silently mangled. Scenarios that
+        # want numeric/bool values should cast explicitly, or pass
+        # coerce_types=True to opt back into best-effort conversion.
+        self.coerce_types = coerce_types
         
     def load_data(self) -> List[Dict[str, Any]]:
         """Load data from CSV file"""
@@ -96,33 +102,51 @@ class CSVDataSource(DataSource):
             raise ValueError(f"Encoding error in {self.file_path}: {e}. Try different encoding.")
             
     def _process_row(self, row: Dict[str, str], row_num: int) -> Dict[str, Any]:
-        """Process and convert row data types"""
+        """Process and (optionally) convert row data types"""
         processed = {}
-        
+
         for key, value in row.items():
             # Clean up key names
             clean_key = key.strip()
-            
-            # Convert value types
+
             if value == "":
                 processed[clean_key] = None
-            elif value.lower() in ("true", "false"):
-                processed[clean_key] = value.lower() == "true"
-            elif value.isdigit():
-                processed[clean_key] = int(value)
+            elif self.coerce_types:
+                processed[clean_key] = self._coerce_value(value)
             else:
-                # Try to convert to float
-                try:
-                    if '.' in value:
-                        processed[clean_key] = float(value)
-                    else:
-                        processed[clean_key] = value
-                except ValueError:
-                    processed[clean_key] = value
-                    
+                # Keep raw string — no silent coercion (default).
+                processed[clean_key] = value
+
         # Add metadata
         processed['_row_number'] = row_num
         return processed
+
+    @staticmethod
+    def _coerce_value(value: str) -> Any:
+        """Best-effort type coercion for a non-empty CSV cell.
+
+        Never coerces values with a leading zero (e.g. "007", "01234") so
+        IDs and zip codes survive as strings.
+        """
+        lowered = value.lower()
+        if lowered in ("true", "false"):
+            return lowered == "true"
+
+        # Don't mangle leading-zero values into numbers.
+        has_leading_zero = len(value) > 1 and value[0] == "0" and value[1] != "."
+        if has_leading_zero:
+            return value
+
+        if value.isdigit():
+            return int(value)
+
+        if '.' in value:
+            try:
+                return float(value)
+            except ValueError:
+                return value
+
+        return value
         
     def validate_data(self) -> bool:
         """Validate CSV data"""

@@ -265,7 +265,10 @@ static PyObject* LoadTestEngine_websocket_connect(LoadTestEngineObject* self, Py
     }
 
     response_t response = {0};
-    int result = engine_websocket_connect(self->engine, url, subprotocol, &response);
+    int result;
+    Py_BEGIN_ALLOW_THREADS
+    result = engine_websocket_connect(self->engine, url, subprotocol, &response);
+    Py_END_ALLOW_THREADS
 
     if (result != 0) {
         PyErr_SetString(PyExc_RuntimeError,
@@ -299,7 +302,10 @@ static PyObject* LoadTestEngine_websocket_send(LoadTestEngineObject* self, PyObj
     }
 
     response_t response = {0};
-    int result = engine_websocket_send(self->engine, url, message, &response);
+    int result;
+    Py_BEGIN_ALLOW_THREADS
+    result = engine_websocket_send(self->engine, url, message, &response);
+    Py_END_ALLOW_THREADS
 
     if (result != 0) {
         PyErr_SetString(PyExc_RuntimeError,
@@ -329,7 +335,10 @@ static PyObject* LoadTestEngine_websocket_close(LoadTestEngineObject* self, PyOb
     }
 
     response_t response = {0};
-    int result = engine_websocket_close(self->engine, url, &response);
+    int result;
+    Py_BEGIN_ALLOW_THREADS
+    result = engine_websocket_close(self->engine, url, &response);
+    Py_END_ALLOW_THREADS
 
     if (result != 0) {
         PyErr_SetString(PyExc_RuntimeError,
@@ -369,19 +378,20 @@ static PyObject* LoadTestEngine_tcp_connect(LoadTestEngineObject* self, PyObject
 static PyObject* LoadTestEngine_tcp_send(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* hostname;
     int port;
-    const char* data;
+    Py_buffer data;          /* s* accepts str (utf-8) and bytes-like, with len */
     int timeout_ms = 30000;
     const char* conn_id = "default";
     static char* kwlist[] = {"hostname", "port", "data", "timeout_ms", "conn_id", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis|is", kwlist, &hostname, &port, &data, &timeout_ms, &conn_id)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis*|is", kwlist, &hostname, &port, &data, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms;
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    tcp_send(hostname, port, conn_id, data, &response);
+    tcp_send(hostname, port, conn_id, (const char*)data.buf, (size_t)data.len, &response);
     Py_END_ALLOW_THREADS
+    PyBuffer_Release(&data);
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
     PyObject* d = build_response_dict(&response);
@@ -462,19 +472,20 @@ static PyObject* LoadTestEngine_udp_create_endpoint(LoadTestEngineObject* self, 
 static PyObject* LoadTestEngine_udp_send(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* hostname;
     int port;
-    const char* data;
+    Py_buffer data;          /* s* accepts str (utf-8) and bytes-like, with len */
     int timeout_ms = 30000;
     const char* conn_id = "default";
     static char* kwlist[] = {"hostname", "port", "data", "timeout_ms", "conn_id", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis|is", kwlist, &hostname, &port, &data, &timeout_ms, &conn_id)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis*|is", kwlist, &hostname, &port, &data, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms;
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    udp_send(hostname, port, conn_id, data, &response);
+    udp_send(hostname, port, conn_id, (const char*)data.buf, (size_t)data.len, &response);
     Py_END_ALLOW_THREADS
+    PyBuffer_Release(&data);
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
     PyObject* d = build_response_dict(&response);
@@ -673,8 +684,7 @@ static PyObject* LoadTestEngine_mqtt_disconnect(LoadTestEngineObject* self, PyOb
 static PyObject* build_database_dict(const response_t* r) {
     PyObject* d = build_response_dict(r);
     if (!d) return NULL;
-    const database_response_data_t* db =
-        (const database_response_data_t*)r->protocol_data.protocol_data;
+    const database_response_data_t* db = &r->protocol_data.database;
     PyObject* dd = PyDict_New();
     dict_set(dd, "rows_affected", PyLong_FromLong(db->rows_affected));
     dict_set(dd, "rows_returned", PyLong_FromLong(db->rows_returned));
@@ -686,14 +696,15 @@ static PyObject* build_database_dict(const response_t* r) {
 static PyObject* LoadTestEngine_database_connect(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* connection_string;
     const char* db_type = "mysql";
-    static char* kwlist[] = {"connection_string", "db_type", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|s", kwlist, &connection_string, &db_type)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"connection_string", "db_type", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ss", kwlist, &connection_string, &db_type, &conn_id)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    engine_database_connect(self->engine, connection_string, db_type, &response);
+    engine_database_connect(self->engine, connection_string, conn_id, db_type, &response);
     Py_END_ALLOW_THREADS
 
     return build_database_dict(&response);
@@ -702,14 +713,15 @@ static PyObject* LoadTestEngine_database_connect(LoadTestEngineObject* self, PyO
 static PyObject* LoadTestEngine_database_query(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* connection_string;
     const char* query;
-    static char* kwlist[] = {"connection_string", "query", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ss", kwlist, &connection_string, &query)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"connection_string", "query", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ss|s", kwlist, &connection_string, &query, &conn_id)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    engine_database_query(self->engine, connection_string, query, &response);
+    engine_database_query(self->engine, connection_string, conn_id, query, &response);
     Py_END_ALLOW_THREADS
 
     return build_database_dict(&response);
@@ -717,14 +729,15 @@ static PyObject* LoadTestEngine_database_query(LoadTestEngineObject* self, PyObj
 
 static PyObject* LoadTestEngine_database_disconnect(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* connection_string;
-    static char* kwlist[] = {"connection_string", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &connection_string)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"connection_string", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|s", kwlist, &connection_string, &conn_id)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    engine_database_disconnect(self->engine, connection_string, &response);
+    engine_database_disconnect(self->engine, connection_string, conn_id, &response);
     Py_END_ALLOW_THREADS
 
     return build_response_dict(&response);

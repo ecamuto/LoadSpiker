@@ -190,25 +190,33 @@ class TestHTTPRequests:
 class TestWebSocketProtocol:
     """Test WebSocket protocol methods via engine (simulated)."""
 
-    def test_websocket_connect(self, engine):
-        """WebSocket connect should return response."""
-        response = engine.websocket_connect("ws://echo.websocket.org")
+    def test_websocket_connect(self, engine, mock_websocket_server):
+        """WebSocket connect performs a real RFC 6455 handshake."""
+        _, port = mock_websocket_server
+        url = f"ws://localhost:{port}"
+        response = engine.websocket_connect(url)
         assert isinstance(response, dict)
-        assert 'success' in response
+        assert response['success'] is True
+        engine.websocket_close(url)
 
-    def test_websocket_send(self, engine):
-        """WebSocket send should return response."""
-        engine.websocket_connect("ws://echo.websocket.org")
-        response = engine.websocket_send("ws://echo.websocket.org", "Hello!")
+    def test_websocket_send(self, engine, mock_websocket_server):
+        """WebSocket send transmits a real frame to the echo server."""
+        _, port = mock_websocket_server
+        url = f"ws://localhost:{port}"
+        engine.websocket_connect(url)
+        response = engine.websocket_send(url, "Hello!")
         assert isinstance(response, dict)
-        assert 'success' in response
+        assert response['success'] is True
+        engine.websocket_close(url)
 
-    def test_websocket_close(self, engine):
-        """WebSocket close should return response."""
-        engine.websocket_connect("ws://echo.websocket.org")
-        response = engine.websocket_close("ws://echo.websocket.org")
+    def test_websocket_close(self, engine, mock_websocket_server):
+        """WebSocket close tears down a real connection."""
+        _, port = mock_websocket_server
+        url = f"ws://localhost:{port}"
+        engine.websocket_connect(url)
+        response = engine.websocket_close(url)
         assert isinstance(response, dict)
-        assert 'success' in response
+        assert response['success'] is True
 
 
 @_skip_database
@@ -225,12 +233,19 @@ class TestDatabaseProtocol:
         assert response['success'] is True
 
     def test_database_connect_postgresql(self, engine):
-        """Database connect for PostgreSQL should return response."""
-        response = engine.database_connect(
-            "postgresql://testuser:testpass@localhost:5432/testdb", "postgresql"
+        """PostgreSQL connect uses real libpq; needs a live server, else skips."""
+        cs = os.environ.get(
+            "LOADSPIKER_TEST_PG",
+            "postgresql://testuser:testpass@localhost:5432/testdb",
         )
+        response = engine.database_connect(cs, "postgresql")
         assert isinstance(response, dict)
-        assert response['success'] is True
+        if not response['success']:
+            # No reachable PostgreSQL — the real driver correctly reports failure.
+            assert "PostgreSQL" in response.get('error_message', '')
+            pytest.skip("No PostgreSQL server reachable for real libpq test")
+        assert response['status_code'] == 200
+        assert "Connected to postgresql database" in response['body']
 
     def test_database_connect_mongodb(self, engine):
         """Database connect for MongoDB should return response."""

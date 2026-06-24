@@ -1292,14 +1292,16 @@ class Engine:
         return self._engine.websocket_close(url=url)
     
     # Phase 1: Database Protocol Support - Database Methods
-    def database_connect(self, connection_string: str, db_type: str = "auto") -> Dict[str, Any]:
+    def database_connect(self, connection_string: str, db_type: str = "auto",
+                         conn_id: str = "default") -> Dict[str, Any]:
         """
         Connect to a database
-        
+
         Args:
             connection_string: Database connection string (e.g., "mysql://user:pass@host:port/database")
             db_type: Database type ("mysql", "postgresql", "mongodb", or "auto" to detect from URL)
-            
+            conn_id: Per-virtual-user key isolating connection state (default "default")
+
         Returns:
             Dictionary containing connection response data
         """
@@ -1313,33 +1315,37 @@ class Engine:
                 db_type = "mongodb"
             else:
                 db_type = "mysql"  # Default fallback
-        
-        return self._engine.database_connect(connection_string=connection_string, db_type=db_type)
-    
-    def database_query(self, connection_string: str, query: str) -> Dict[str, Any]:
+
+        return self._engine.database_connect(connection_string=connection_string, db_type=db_type, conn_id=conn_id)
+
+    def database_query(self, connection_string: str, query: str,
+                      conn_id: str = "default") -> Dict[str, Any]:
         """
         Execute a database query
-        
+
         Args:
             connection_string: Database connection string
             query: SQL query or database command to execute
-            
+            conn_id: Per-virtual-user key isolating connection state (default "default")
+
         Returns:
             Dictionary containing query response data including result set
         """
-        return self._engine.database_query(connection_string=connection_string, query=query)
-    
-    def database_disconnect(self, connection_string: str) -> Dict[str, Any]:
+        return self._engine.database_query(connection_string=connection_string, query=query, conn_id=conn_id)
+
+    def database_disconnect(self, connection_string: str,
+                           conn_id: str = "default") -> Dict[str, Any]:
         """
         Disconnect from a database
-        
+
         Args:
             connection_string: Database connection string
-            
+            conn_id: Per-virtual-user key isolating connection state (default "default")
+
         Returns:
             Dictionary containing disconnection response data
         """
-        return self._engine.database_disconnect(connection_string=connection_string)
+        return self._engine.database_disconnect(connection_string=connection_string, conn_id=conn_id)
     
     # Phase 1: TCP Socket Support - TCP Methods
     def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000,

@@ -1,5 +1,6 @@
 #include "udp.h"
 #include "../common.h"
+#include "pool_common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -59,9 +60,7 @@ int udp_parse_url(const char* url, char* host, int* port) {
 /* Find a slot for (host, port, conn_id). Caller MUST hold udp_pool_mutex. */
 static udp_endpoint_t* udp_find_locked(const char* host, int port, const char* conn_id) {
     for (int i = 0; i < udp_endpoint_count; i++) {
-        if (udp_endpoints[i].port == port &&
-            strcmp(udp_endpoints[i].host, host) == 0 &&
-            strcmp(udp_endpoints[i].conn_id, conn_id) == 0) {
+        if (POOL_SLOT_MATCHES(udp_endpoints[i], host, port, conn_id, conn_id)) {
             return &udp_endpoints[i];
         }
     }
@@ -73,11 +72,8 @@ static udp_endpoint_t* udp_find_or_reserve_locked(const char* host, int port, co
     udp_endpoint_t* ep = udp_find_locked(host, port, conn_id);
     if (ep) return ep;
 
-    if (udp_endpoint_count >= MAX_UDP_ENDPOINTS) {
-        if (!udp_pool_warned) {
-            fprintf(stderr, "[LoadSpiker] UDP pool full — increase MAX_UDP_ENDPOINTS\n");
-            udp_pool_warned = 1;
-        }
+    if (pool_reserve_full(udp_endpoint_count, MAX_UDP_ENDPOINTS,
+                          &udp_pool_warned, "UDP", "MAX_UDP_ENDPOINTS")) {
         return NULL;
     }
 

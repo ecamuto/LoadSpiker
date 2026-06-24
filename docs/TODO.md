@@ -88,8 +88,14 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 
 ## 5. Refactor / cleanup
 
-- [ ] 🟡 **Dedup protocol pool boilerplate.** find-or-create + pool-full logic is
-      copy-pasted across `tcp.c`, `udp.c`, `mqtt.c`. Extract a shared helper.
+- [x] 🟡 **Dedup protocol pool boilerplate.** Added `src/protocols/pool_common.h`
+      with a `pool_reserve_full()` inline (the one-time "pool full" warning) and a
+      `POOL_SLOT_MATCHES` macro (the `(host, port, id)` match). tcp.c, udp.c, and
+      mqtt.c now use them — including MQTT's two duplicate copies
+      (`mqtt_create_connection` + `mqtt_find_or_reserve_locked`). Slot allocation
+      and per-protocol field init stay local (struct types/fields differ), so the
+      locking semantics are untouched. Behaviour-preserving: tsan reports no
+      races, asan no memory errors, and the TCP/UDP suites pass in isolation.
 - [ ] 🟡 **Coarse ramp-up.** `engine.py:_run_with_ramp_up` re-runs
       `start_load_test` in 5 s bursts with `sleep(1)`. Consider driving ramp in
       the C core for smoother granularity.

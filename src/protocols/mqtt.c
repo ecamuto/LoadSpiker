@@ -1,4 +1,5 @@
 #include "mqtt.h"
+#include "pool_common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -119,9 +120,7 @@ mqtt_connection_t* mqtt_find_connection(const char* host, int port, const char* 
     pthread_mutex_lock(&mqtt_pool_mutex);
     mqtt_connection_t* result = NULL;
     for (int i = 0; i < mqtt_connection_count; i++) {
-        if (strcmp(mqtt_connections[i].host, host) == 0 &&
-            mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
+        if (POOL_SLOT_MATCHES(mqtt_connections[i], host, port, client_id, client_id)) {
             result = &mqtt_connections[i];
             break;
         }
@@ -132,11 +131,8 @@ mqtt_connection_t* mqtt_find_connection(const char* host, int port, const char* 
 
 mqtt_connection_t* mqtt_create_connection(const char* host, int port, const char* client_id) {
     pthread_mutex_lock(&mqtt_pool_mutex);
-    if (mqtt_connection_count >= MAX_MQTT_CONNECTIONS) {
-        if (!mqtt_pool_warned) {
-            fprintf(stderr, "[LoadSpiker] MQTT pool full — increase MAX_MQTT_CONNECTIONS\n");
-            mqtt_pool_warned = 1;
-        }
+    if (pool_reserve_full(mqtt_connection_count, MAX_MQTT_CONNECTIONS,
+                          &mqtt_pool_warned, "MQTT", "MAX_MQTT_CONNECTIONS")) {
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return NULL;
     }
@@ -285,9 +281,7 @@ static int mqtt_create_publish_packet(char* buffer, const char* topic,
    mqtt_pool_mutex. */
 static mqtt_connection_t* mqtt_find_locked(const char* host, int port, const char* client_id) {
     for (int i = 0; i < mqtt_connection_count; i++) {
-        if (mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].host, host) == 0 &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
+        if (POOL_SLOT_MATCHES(mqtt_connections[i], host, port, client_id, client_id)) {
             return &mqtt_connections[i];
         }
     }
@@ -303,11 +297,8 @@ static mqtt_connection_t* mqtt_find_or_reserve_locked(const char* host, int port
     mqtt_connection_t* conn = mqtt_find_locked(host, port, client_id);
     if (conn) return conn;
 
-    if (mqtt_connection_count >= MAX_MQTT_CONNECTIONS) {
-        if (!mqtt_pool_warned) {
-            fprintf(stderr, "[LoadSpiker] MQTT pool full — increase MAX_MQTT_CONNECTIONS\n");
-            mqtt_pool_warned = 1;
-        }
+    if (pool_reserve_full(mqtt_connection_count, MAX_MQTT_CONNECTIONS,
+                          &mqtt_pool_warned, "MQTT", "MAX_MQTT_CONNECTIONS")) {
         return NULL;
     }
 

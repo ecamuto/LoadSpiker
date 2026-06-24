@@ -1,5 +1,6 @@
 #include "tcp.h"
 #include "../common.h"
+#include "pool_common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -60,9 +61,7 @@ int tcp_parse_url(const char* url, char* host, int* port) {
 /* Find a pool slot for (host, port, conn_id). Caller MUST hold tcp_pool_mutex. */
 static tcp_connection_t* tcp_find_locked(const char* host, int port, const char* conn_id) {
     for (int i = 0; i < tcp_connection_count; i++) {
-        if (tcp_connections[i].port == port &&
-            strcmp(tcp_connections[i].host, host) == 0 &&
-            strcmp(tcp_connections[i].conn_id, conn_id) == 0) {
+        if (POOL_SLOT_MATCHES(tcp_connections[i], host, port, conn_id, conn_id)) {
             return &tcp_connections[i];
         }
     }
@@ -75,11 +74,8 @@ static tcp_connection_t* tcp_find_or_reserve_locked(const char* host, int port, 
     tcp_connection_t* conn = tcp_find_locked(host, port, conn_id);
     if (conn) return conn;
 
-    if (tcp_connection_count >= MAX_TCP_CONNECTIONS) {
-        if (!tcp_pool_warned) {
-            fprintf(stderr, "[LoadSpiker] TCP pool full — increase MAX_TCP_CONNECTIONS\n");
-            tcp_pool_warned = 1;
-        }
+    if (pool_reserve_full(tcp_connection_count, MAX_TCP_CONNECTIONS,
+                          &tcp_pool_warned, "TCP", "MAX_TCP_CONNECTIONS")) {
         return NULL;
     }
 

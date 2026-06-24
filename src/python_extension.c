@@ -350,15 +350,16 @@ static PyObject* LoadTestEngine_tcp_connect(LoadTestEngineObject* self, PyObject
     const char* hostname;
     int port;
     int timeout_ms = 30000;
-    static char* kwlist[] = {"hostname", "port", "timeout_ms", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|i", kwlist, &hostname, &port, &timeout_ms)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "timeout_ms", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|is", kwlist, &hostname, &port, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms; /* tcp.c uses a fixed select() timeout */
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    tcp_connect(hostname, port, &response);
+    tcp_connect(hostname, port, conn_id, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -370,15 +371,16 @@ static PyObject* LoadTestEngine_tcp_send(LoadTestEngineObject* self, PyObject* a
     int port;
     const char* data;
     int timeout_ms = 30000;
-    static char* kwlist[] = {"hostname", "port", "data", "timeout_ms", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis|i", kwlist, &hostname, &port, &data, &timeout_ms)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "data", "timeout_ms", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis|is", kwlist, &hostname, &port, &data, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms;
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    tcp_send(hostname, port, data, &response);
+    tcp_send(hostname, port, conn_id, data, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -395,15 +397,16 @@ static PyObject* LoadTestEngine_tcp_receive(LoadTestEngineObject* self, PyObject
     const char* hostname;
     int port;
     int timeout_ms = 30000;
-    static char* kwlist[] = {"hostname", "port", "timeout_ms", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|i", kwlist, &hostname, &port, &timeout_ms)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "timeout_ms", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|is", kwlist, &hostname, &port, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms;
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    tcp_receive(hostname, port, &response);
+    tcp_receive(hostname, port, conn_id, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -420,14 +423,15 @@ static PyObject* LoadTestEngine_tcp_receive(LoadTestEngineObject* self, PyObject
 static PyObject* LoadTestEngine_tcp_disconnect(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* hostname;
     int port;
-    static char* kwlist[] = {"hostname", "port", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si", kwlist, &hostname, &port)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|s", kwlist, &hostname, &port, &conn_id)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    tcp_disconnect(hostname, port, &response);
+    tcp_disconnect(hostname, port, conn_id, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -440,14 +444,15 @@ static PyObject* LoadTestEngine_tcp_disconnect(LoadTestEngineObject* self, PyObj
 static PyObject* LoadTestEngine_udp_create_endpoint(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* hostname;
     int port;
-    static char* kwlist[] = {"hostname", "port", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si", kwlist, &hostname, &port)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|s", kwlist, &hostname, &port, &conn_id)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    udp_create_endpoint(hostname, port, &response);
+    udp_create_endpoint(hostname, port, conn_id, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -459,15 +464,16 @@ static PyObject* LoadTestEngine_udp_send(LoadTestEngineObject* self, PyObject* a
     int port;
     const char* data;
     int timeout_ms = 30000;
-    static char* kwlist[] = {"hostname", "port", "data", "timeout_ms", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis|i", kwlist, &hostname, &port, &data, &timeout_ms)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "data", "timeout_ms", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sis|is", kwlist, &hostname, &port, &data, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms;
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    udp_send(hostname, port, data, &response);
+    udp_send(hostname, port, conn_id, data, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -486,15 +492,16 @@ static PyObject* LoadTestEngine_udp_receive(LoadTestEngineObject* self, PyObject
     const char* hostname;
     int port;
     int timeout_ms = 30000;
-    static char* kwlist[] = {"hostname", "port", "timeout_ms", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|i", kwlist, &hostname, &port, &timeout_ms)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "timeout_ms", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|is", kwlist, &hostname, &port, &timeout_ms, &conn_id)) {
         return NULL;
     }
     (void)timeout_ms;
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    udp_receive(hostname, port, &response);
+    udp_receive(hostname, port, conn_id, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -512,14 +519,15 @@ static PyObject* LoadTestEngine_udp_receive(LoadTestEngineObject* self, PyObject
 static PyObject* LoadTestEngine_udp_close_endpoint(LoadTestEngineObject* self, PyObject* args, PyObject* kwds) {
     const char* hostname;
     int port;
-    static char* kwlist[] = {"hostname", "port", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si", kwlist, &hostname, &port)) {
+    const char* conn_id = "default";
+    static char* kwlist[] = {"hostname", "port", "conn_id", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|s", kwlist, &hostname, &port, &conn_id)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    udp_close_endpoint(hostname, port, &response);
+    udp_close_endpoint(hostname, port, conn_id, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 

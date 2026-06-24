@@ -347,7 +347,7 @@ class _PythonEngine:
         }
     
     # TCP Socket Python fallback methods
-    def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]:
+    def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for TCP connections using socket library"""
         try:
             import socket
@@ -368,7 +368,7 @@ class _PythonEngine:
             # Store socket for future operations (simplified approach)
             if not hasattr(self, '_tcp_sockets'):
                 self._tcp_sockets = {}
-            self._tcp_sockets[f"{hostname}:{port}"] = sock
+            self._tcp_sockets[f"{conn_id}:{hostname}:{port}"] = sock
             
             self._metrics['total_requests'] += 1
             self._metrics['successful_requests'] += 1
@@ -399,7 +399,7 @@ class _PythonEngine:
                 'error_message': f'TCP connection failed: {str(e)}'
             }
     
-    def tcp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]:
+    def tcp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for TCP send using socket library"""
         try:
             import time
@@ -410,7 +410,7 @@ class _PythonEngine:
             if not hasattr(self, '_tcp_sockets'):
                 self._tcp_sockets = {}
             
-            socket_key = f"{hostname}:{port}"
+            socket_key = f"{conn_id}:{hostname}:{port}"
             if socket_key not in self._tcp_sockets:
                 return {
                     'status_code': 400,
@@ -458,7 +458,7 @@ class _PythonEngine:
                 'error_message': f'TCP send failed: {str(e)}'
             }
     
-    def tcp_receive(self, hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]:
+    def tcp_receive(self, hostname: str, port: int, timeout_ms: int = 30000, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for TCP receive using socket library"""
         try:
             import time
@@ -469,7 +469,7 @@ class _PythonEngine:
             if not hasattr(self, '_tcp_sockets'):
                 self._tcp_sockets = {}
             
-            socket_key = f"{hostname}:{port}"
+            socket_key = f"{conn_id}:{hostname}:{port}"
             if socket_key not in self._tcp_sockets:
                 return {
                     'status_code': 400,
@@ -518,7 +518,7 @@ class _PythonEngine:
                 'error_message': f'TCP receive failed: {str(e)}'
             }
     
-    def tcp_disconnect(self, hostname: str, port: int) -> Dict[str, Any]:
+    def tcp_disconnect(self, hostname: str, port: int, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for TCP disconnect using socket library"""
         try:
             import time
@@ -529,7 +529,7 @@ class _PythonEngine:
             if not hasattr(self, '_tcp_sockets'):
                 self._tcp_sockets = {}
             
-            socket_key = f"{hostname}:{port}"
+            socket_key = f"{conn_id}:{hostname}:{port}"
             if socket_key not in self._tcp_sockets:
                 return {
                     'status_code': 400,
@@ -572,7 +572,7 @@ class _PythonEngine:
             }
     
     # UDP Socket Python fallback methods
-    def udp_create_endpoint(self, hostname: str, port: int) -> Dict[str, Any]:
+    def udp_create_endpoint(self, hostname: str, port: int, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for UDP endpoint creation using socket library"""
         try:
             import socket
@@ -586,7 +586,7 @@ class _PythonEngine:
             # Store socket for future operations
             if not hasattr(self, '_udp_sockets'):
                 self._udp_sockets = {}
-            self._udp_sockets[f"{hostname}:{port}"] = sock
+            self._udp_sockets[f"{conn_id}:{hostname}:{port}"] = sock
             
             end_time = time.time()
             response_time_ms = (end_time - start_time) * 1000
@@ -622,7 +622,7 @@ class _PythonEngine:
                 'error_message': f'UDP endpoint creation failed: {str(e)}'
             }
     
-    def udp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]:
+    def udp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for UDP send using socket library"""
         try:
             import time
@@ -633,7 +633,7 @@ class _PythonEngine:
             if not hasattr(self, '_udp_sockets'):
                 self._udp_sockets = {}
             
-            socket_key = f"{hostname}:{port}"
+            socket_key = f"{conn_id}:{hostname}:{port}"
             if socket_key not in self._udp_sockets:
                 # Auto-create endpoint if it doesn't exist
                 create_result = self.udp_create_endpoint(hostname, port)
@@ -679,7 +679,7 @@ class _PythonEngine:
                 'error_message': f'UDP send failed: {str(e)}'
             }
     
-    def udp_receive(self, hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]:
+    def udp_receive(self, hostname: str, port: int, timeout_ms: int = 30000, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for UDP receive using socket library"""
         try:
             import time
@@ -690,7 +690,7 @@ class _PythonEngine:
             if not hasattr(self, '_udp_sockets'):
                 self._udp_sockets = {}
             
-            socket_key = f"{hostname}:{port}"
+            socket_key = f"{conn_id}:{hostname}:{port}"
             if socket_key not in self._udp_sockets:
                 return {
                     'status_code': 400,
@@ -741,7 +741,7 @@ class _PythonEngine:
                 'error_message': f'UDP receive failed: {str(e)}'
             }
     
-    def udp_close_endpoint(self, hostname: str, port: int) -> Dict[str, Any]:
+    def udp_close_endpoint(self, hostname: str, port: int, conn_id: str = "default") -> Dict[str, Any]:
         """Python fallback for UDP endpoint closure using socket library"""
         try:
             import time
@@ -752,7 +752,7 @@ class _PythonEngine:
             if not hasattr(self, '_udp_sockets'):
                 self._udp_sockets = {}
             
-            socket_key = f"{hostname}:{port}"
+            socket_key = f"{conn_id}:{hostname}:{port}"
             if socket_key not in self._udp_sockets:
                 return {
                     'status_code': 400,
@@ -1148,6 +1148,7 @@ class Engine:
             operations = scenario.get_load_operations(user_id)
             if not operations:
                 return
+            operations = [self._isolate_operation(op, user_id) for op in operations]
             while time.time() < end_time:
                 for op in operations:
                     if time.time() >= end_time:
@@ -1162,7 +1163,23 @@ class Engine:
             t.start()
         for t in threads:
             t.join()
-    
+
+    @staticmethod
+    def _isolate_operation(op: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+        """Give each virtual user its own connection identity so concurrent
+        users targeting the same endpoint do not share a socket.
+
+        TCP/UDP ops get a per-user conn_id; MQTT ops get a per-user client_id.
+        """
+        op = dict(op)
+        op_type = op.get("type", "")
+        if op_type.startswith("tcp_") or op_type.startswith("udp_"):
+            op["conn_id"] = f"u{user_id}"
+        elif op_type.startswith("mqtt_"):
+            base = op.get("client_id", "loadspiker_client")
+            op["client_id"] = f"{base}_u{user_id}"
+        return op
+
     def _run_with_ramp_up(self, requests: List[Dict[str, Any]], 
                          target_users: int, duration: int, ramp_up_duration: int):
         """Run test with gradual user ramp-up"""
@@ -1325,117 +1342,131 @@ class Engine:
         return self._engine.database_disconnect(connection_string=connection_string)
     
     # Phase 1: TCP Socket Support - TCP Methods
-    def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]:
+    def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000,
+                    conn_id: str = "default") -> Dict[str, Any]:
         """
         Connect to a TCP server
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
             timeout_ms: Connection timeout in milliseconds
-            
+            conn_id: Connection identity (one per virtual user) so concurrent
+                users targeting the same host:port get isolated sockets
+
         Returns:
             Dictionary containing connection response data
         """
-        return self._engine.tcp_connect(hostname=hostname, port=port, timeout_ms=timeout_ms)
-    
-    def tcp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]:
+        return self._engine.tcp_connect(hostname=hostname, port=port, timeout_ms=timeout_ms, conn_id=conn_id)
+
+    def tcp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000,
+                 conn_id: str = "default") -> Dict[str, Any]:
         """
         Send data to a TCP connection
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
             data: Data to send
             timeout_ms: Send timeout in milliseconds
-            
+            conn_id: Connection identity (one per virtual user)
+
         Returns:
             Dictionary containing send response data
         """
-        return self._engine.tcp_send(hostname=hostname, port=port, data=data, timeout_ms=timeout_ms)
-    
-    def tcp_receive(self, hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]:
+        return self._engine.tcp_send(hostname=hostname, port=port, data=data, timeout_ms=timeout_ms, conn_id=conn_id)
+
+    def tcp_receive(self, hostname: str, port: int, timeout_ms: int = 30000,
+                    conn_id: str = "default") -> Dict[str, Any]:
         """
         Receive data from a TCP connection
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
             timeout_ms: Receive timeout in milliseconds
-            
+            conn_id: Connection identity (one per virtual user)
+
         Returns:
             Dictionary containing received data
         """
-        return self._engine.tcp_receive(hostname=hostname, port=port, timeout_ms=timeout_ms)
-    
-    def tcp_disconnect(self, hostname: str, port: int) -> Dict[str, Any]:
+        return self._engine.tcp_receive(hostname=hostname, port=port, timeout_ms=timeout_ms, conn_id=conn_id)
+
+    def tcp_disconnect(self, hostname: str, port: int, conn_id: str = "default") -> Dict[str, Any]:
         """
         Disconnect from a TCP server
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
-            
+            conn_id: Connection identity (one per virtual user)
+
         Returns:
             Dictionary containing disconnection response data
         """
-        return self._engine.tcp_disconnect(hostname=hostname, port=port)
+        return self._engine.tcp_disconnect(hostname=hostname, port=port, conn_id=conn_id)
     
     # Phase 1: UDP Socket Support - UDP Methods
-    def udp_create_endpoint(self, hostname: str, port: int) -> Dict[str, Any]:
+    def udp_create_endpoint(self, hostname: str, port: int, conn_id: str = "default") -> Dict[str, Any]:
         """
         Create a UDP endpoint for communication
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
-            
+            conn_id: Endpoint identity (one per virtual user) for isolation
+
         Returns:
             Dictionary containing endpoint creation response data
         """
-        return self._engine.udp_create_endpoint(hostname=hostname, port=port)
-    
-    def udp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000) -> Dict[str, Any]:
+        return self._engine.udp_create_endpoint(hostname=hostname, port=port, conn_id=conn_id)
+
+    def udp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000,
+                 conn_id: str = "default") -> Dict[str, Any]:
         """
         Send data via UDP
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
             data: Data to send
             timeout_ms: Send timeout in milliseconds
-            
+            conn_id: Endpoint identity (one per virtual user)
+
         Returns:
             Dictionary containing send response data
         """
-        return self._engine.udp_send(hostname=hostname, port=port, data=data, timeout_ms=timeout_ms)
-    
-    def udp_receive(self, hostname: str, port: int, timeout_ms: int = 30000) -> Dict[str, Any]:
+        return self._engine.udp_send(hostname=hostname, port=port, data=data, timeout_ms=timeout_ms, conn_id=conn_id)
+
+    def udp_receive(self, hostname: str, port: int, timeout_ms: int = 30000,
+                    conn_id: str = "default") -> Dict[str, Any]:
         """
         Receive data via UDP
-        
+
         Args:
             hostname: Target hostname or IP address
             port: Target port number
             timeout_ms: Receive timeout in milliseconds
-            
+            conn_id: Endpoint identity (one per virtual user)
+
         Returns:
             Dictionary containing received data and sender information
         """
-        return self._engine.udp_receive(hostname=hostname, port=port, timeout_ms=timeout_ms)
-    
-    def udp_close_endpoint(self, hostname: str, port: int) -> Dict[str, Any]:
+        return self._engine.udp_receive(hostname=hostname, port=port, timeout_ms=timeout_ms, conn_id=conn_id)
+
+    def udp_close_endpoint(self, hostname: str, port: int, conn_id: str = "default") -> Dict[str, Any]:
         """
         Close a UDP endpoint
 
         Args:
             hostname: Target hostname or IP address
             port: Target port number
+            conn_id: Endpoint identity (one per virtual user)
 
         Returns:
             Dictionary containing endpoint closure response data
         """
-        return self._engine.udp_close_endpoint(hostname=hostname, port=port)
+        return self._engine.udp_close_endpoint(hostname=hostname, port=port, conn_id=conn_id)
     
     # Phase 2: Message Queue Protocol Support - MQTT Methods
     def mqtt_connect(self, broker_host: str, broker_port: int = 1883, 

@@ -5,10 +5,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MAX_CONN_ID_LENGTH 64
+
 // TCP connection structure
 typedef struct {
     char host[256];
     int port;
+    char conn_id[MAX_CONN_ID_LENGTH]; // per-virtual-user key; "" / "default" for single-user
     int socket_fd;
     bool is_connected;
     char last_error[256];
@@ -23,17 +26,17 @@ typedef struct {
     int connection_time_us;
 } tcp_data_t;
 
-// Function declarations
-int tcp_connect(const char* host, int port, response_t* response);
-int tcp_send(const char* host, int port, const char* data, response_t* response);
-int tcp_receive(const char* host, int port, response_t* response);
-int tcp_disconnect(const char* host, int port, response_t* response);
+// Function declarations.
+// conn_id identifies the logical owner (one virtual user) so concurrent users
+// targeting the same host:port get isolated sockets. Pass "default" (or "") for
+// single-user / direct use.
+int tcp_connect(const char* host, int port, const char* conn_id, response_t* response);
+int tcp_send(const char* host, int port, const char* conn_id, const char* data, response_t* response);
+int tcp_receive(const char* host, int port, const char* conn_id, response_t* response);
+int tcp_disconnect(const char* host, int port, const char* conn_id, response_t* response);
 
 // Helper functions
 int tcp_parse_url(const char* url, char* host, int* port);
-tcp_connection_t* tcp_find_connection(const char* host, int port);
-tcp_connection_t* tcp_create_connection(const char* host, int port);
-int tcp_lookup_by_fd(int socket_fd, char* host_out, int* port_out);
 
 // Cleanup function - closes all TCP connections
 void tcp_cleanup_all(void);

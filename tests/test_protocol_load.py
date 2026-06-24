@@ -118,6 +118,37 @@ def test_tcp_scenario_runs_under_load(echo_server):
     assert metrics["successful_requests"] > 0
 
 
+def test_tcp_per_user_isolation(echo_server):
+    """Concurrent users must each get their own socket (no cross-talk).
+
+    Each user connects with a distinct conn_id and exchanges uniquely-tagged
+    messages; if sockets were shared (the old host:port-keyed pool), echoes
+    would be delivered to the wrong user.
+    """
+    engine = Engine(max_connections=64, worker_threads=8)
+    errors = []
+
+    def user(uid):
+        cid = f"u{uid}"
+        engine.tcp_connect("localhost", echo_server.port, conn_id=cid)
+        for i in range(25):
+            msg = f"user{uid}-msg{i}"
+            engine.tcp_send("localhost", echo_server.port, msg, conn_id=cid)
+            resp = engine.tcp_receive("localhost", echo_server.port, conn_id=cid)
+            got = resp.get("protocol_data", {}).get("received_data", "")
+            if got != msg:
+                errors.append((uid, i, msg, got))
+        engine.tcp_disconnect("localhost", echo_server.port, conn_id=cid)
+
+    threads = [threading.Thread(target=user, args=(u,)) for u in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == [], f"cross-talk between virtual users: {errors[:3]}"
+
+
 def test_mixed_scenario_runs_under_load():
     """Mixed websocket/database (simulated) operations execute under load."""
     engine = Engine(max_connections=10, worker_threads=2)

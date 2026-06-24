@@ -174,7 +174,7 @@ int engine_start_load_test_generic(engine_t* engine, const request_t* requests, 
 // Legacy HTTP functions (for backward compatibility)
 int engine_execute_request(engine_t* engine, const http_request_t* request, http_response_t* response);
 int engine_execute_request_sync(engine_t* engine, const http_request_t* request, http_response_t* response);
-int engine_start_load_test(engine_t* engine, const http_request_t* requests, int num_requests, int concurrent_users, int duration_seconds);
+int engine_start_load_test(engine_t* engine, const http_request_t* requests, int num_requests, int concurrent_users, int duration_seconds, int ramp_up_seconds);
 
 // WebSocket specific functions
 int engine_websocket_connect(engine_t* engine, const char* url, const char* subprotocol, response_t* response);

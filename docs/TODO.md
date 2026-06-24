@@ -96,9 +96,17 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       and per-protocol field init stay local (struct types/fields differ), so the
       locking semantics are untouched. Behaviour-preserving: tsan reports no
       races, asan no memory errors, and the TCP/UDP suites pass in isolation.
-- [ ] 🟡 **Coarse ramp-up.** `engine.py:_run_with_ramp_up` re-runs
-      `start_load_test` in 5 s bursts with `sleep(1)`. Consider driving ramp in
-      the C core for smoother granularity.
+- [x] 🟡 **Coarse ramp-up — now driven in C.** Replaced the Python burst loop
+      (`_run_with_ramp_up`, 5 s bursts + `sleep(1)`) with a ramp inside the C
+      core. `engine_start_load_test` gained a `ramp_up_seconds` parameter and was
+      reworked from batch-drain (run the request list once) to **duration-
+      sustained**: each worker cycles the request set via a shared atomic index
+      until the duration elapses, and workers self-gate on a staggered
+      activation time so load grows smoothly across the ramp window. The
+      extension exposes `ramp_up_seconds` (default 0); `run_scenario` passes it
+      straight through. Verified: a local-HTTP run sustains ~11.8k RPS for the
+      full duration (was a fast single drain), ramp variant ramps as expected;
+      TSan reports no races, ASan no leaks.
 - [x] 🟡 **Consolidate root-level `test_*.py` scripts.** Removed all 14 root
       `test_*.py` plus the orphaned `test_csv_data.csv`. None were real tests:
       every one was an early `__main__` demo/smoke script that printed instead of

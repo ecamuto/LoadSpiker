@@ -308,9 +308,9 @@ class _PythonEngine:
             'requests_per_second': 0.0
         }
     
-    def start_load_test(self, requests: List[Dict], concurrent_users: int, duration_seconds: int):
+    def start_load_test(self, requests: List[Dict], concurrent_users: int, duration_seconds: int, ramp_up_seconds: int = 0):
         """Basic load test implementation"""
-        print(f"Python fallback: Running load test with {concurrent_users} users for {duration_seconds}s")
+        print(f"Python fallback: Running load test with {concurrent_users} users for {duration_seconds}s (ramp {ramp_up_seconds}s)")
     
     # Placeholder methods for protocol support
     def websocket_connect(self, url: str, subprotocol: str = "") -> Dict[str, Any]:
@@ -1072,14 +1072,14 @@ class Engine:
         if http_only:
             requests = scenario.build_requests()
 
-            if ramp_up_duration > 0:
-                self._run_with_ramp_up(requests, users, duration, ramp_up_duration)
-            else:
-                self._engine.start_load_test(
-                    requests=requests,
-                    concurrent_users=users,
-                    duration_seconds=duration
-                )
+            # Ramp-up is handled inside the C core: it staggers worker activation
+            # across ramp_up_seconds for smooth load growth (no Python burst loop).
+            self._engine.start_load_test(
+                requests=requests,
+                concurrent_users=users,
+                duration_seconds=duration,
+                ramp_up_seconds=ramp_up_duration,
+            )
         else:
             self._run_protocol_load_test(scenario, users, duration)
 
@@ -1180,31 +1180,6 @@ class Engine:
             op["client_id"] = f"{base}_u{user_id}"
         return op
 
-    def _run_with_ramp_up(self, requests: List[Dict[str, Any]], 
-                         target_users: int, duration: int, ramp_up_duration: int):
-        """Run test with gradual user ramp-up"""
-        start_time = time.time()
-        ramp_end_time = start_time + ramp_up_duration
-        test_end_time = start_time + duration
-        
-        current_users = 1
-        
-        while time.time() < test_end_time:
-            if time.time() < ramp_end_time:
-                progress = (time.time() - start_time) / ramp_up_duration
-                current_users = max(1, int(target_users * progress))
-            else:
-                current_users = target_users
-            
-            # Run for a short burst with current user count
-            self._engine.start_load_test(
-                requests=requests,
-                concurrent_users=current_users,
-                duration_seconds=min(5, int(test_end_time - time.time()))
-            )
-            
-            time.sleep(1)
-    
     def get_metrics(self) -> Dict[str, Any]:
         """Get current performance metrics"""
         return self._engine.get_metrics()

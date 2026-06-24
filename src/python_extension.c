@@ -137,11 +137,12 @@ static PyObject* LoadTestEngine_start_load_test(LoadTestEngineObject* self, PyOb
     PyObject* requests_list;
     int concurrent_users = 10;
     int duration_seconds = 60;
+    int ramp_up_seconds = 0;
 
-    static char* kwlist[] = {"requests", "concurrent_users", "duration_seconds", NULL};
+    static char* kwlist[] = {"requests", "concurrent_users", "duration_seconds", "ramp_up_seconds", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|ii", kwlist,
-                                     &requests_list, &concurrent_users, &duration_seconds)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|iii", kwlist,
+                                     &requests_list, &concurrent_users, &duration_seconds, &ramp_up_seconds)) {
         return NULL;
     }
 
@@ -210,7 +211,7 @@ static PyObject* LoadTestEngine_start_load_test(LoadTestEngineObject* self, PyOb
     }
 
     Py_BEGIN_ALLOW_THREADS
-    engine_start_load_test(self->engine, requests, num_requests, concurrent_users, duration_seconds);
+    engine_start_load_test(self->engine, requests, num_requests, concurrent_users, duration_seconds, ramp_up_seconds);
     Py_END_ALLOW_THREADS
 
     free(requests);

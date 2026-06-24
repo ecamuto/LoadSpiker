@@ -78,8 +78,11 @@ re-looked-up the pool entry by `host:port`. Two connections to the same endpoint
 collapsed to one slot, and a closed-then-reused fd could alias the wrong entry
 under concurrency.
 **Fix:** the wrappers were **dead code** (nothing called them — the Python
-bridge talks to the protocol functions directly by `host:port`). They were
-removed entirely, eliminating the unsafe lookup path.
+bridge talks to the protocol functions directly). They were removed entirely,
+eliminating the unsafe lookup path. The pools were subsequently re-keyed by
+`(host, port, conn_id)` for per-virtual-user socket isolation, and the pool
+mutex is no longer held during blocking I/O (it is taken only to find/reserve/
+mutate a slot), removing the process-wide serialization of socket operations.
 
 ### V6 — Binary payloads truncated at the first NUL  *(Open)*
 **Location:** `tcp_send()`, `udp_send()` use `strlen(data)`; the extension

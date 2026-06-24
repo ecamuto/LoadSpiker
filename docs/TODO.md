@@ -120,9 +120,15 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 
 ## 7. Documentation reconciliation
 
-- [ ] 🟠 **`docs/site/*.html` is stale.** The static site still presents
-      WebSocket/Database/protocol support as fully working; reconcile with the
-      capability matrix in the [README](../README.md).
+- [x] 🟠 **`docs/site/*.html` reconciled.** Updated `protocols.html`,
+      `architecture.html`, `api-reference.html`, and `roadmap.html` to match the
+      real capability state: WebSocket is real RFC 6455 (libcurl WS,
+      `HAVE_CURL_WEBSOCKETS`) with a simulated fallback; PostgreSQL is real
+      (libpq, `HAVE_LIBPQ`) while MySQL/MongoDB stay simulated; all protocols are
+      bound through the Python extension (dropped the stale "Python bindings
+      pending" / "Phase 1 simulation" notices). Also corrected the
+      [README](../README.md) matrix itself, which still claimed WebSocket/Database
+      were simulated and TCP truncated binary/NUL payloads (fixed by V6).
 - [ ] 🟡 Reconcile [docs/API.md](API.md), [docs/CODE_ANALYSIS.md](CODE_ANALYSIS.md),
       [docs/ROADMAP.md](ROADMAP.md), [CHANGELOG.md](../CHANGELOG.md), and the
       short [CONTRIBUTING.md](../CONTRIBUTING.md) with the current state and the

@@ -161,11 +161,11 @@ results = engine.run_scenario(main_scenario, users=100, duration=60)</code></pre
       <h3 id="database-methods">Database Methods</h3>
 
       <div class="method-sig"><code>engine.database_connect(connection_string, pool_size=10)</code></div>
-      <p>Create a simulated database connection pool. Returns a connection ID string.</p>
+      <p>Open a database connection pool. PostgreSQL connects for real via libpq when built with <code>HAVE_LIBPQ</code>; MySQL/MongoDB are simulated. Returns a connection ID string.</p>
       <pre><code class="language-python">conn_id = engine.database_connect("mysql://user:pass@localhost/mydb", pool_size=20)</code></pre>
 
       <div class="method-sig"><code>engine.database_query(connection_id, query, params=None)</code></div>
-      <p>Execute a query against the simulated connection pool. Returns a response dict with <code>status_code</code>, <code>body</code>, and <code>response_time_ms</code>.</p>
+      <p>Execute a query (real <code>PQexec</code> for PostgreSQL, simulated otherwise). Returns a response dict with <code>status_code</code>, <code>body</code>, and <code>response_time_ms</code>.</p>
       <pre><code class="language-python">result = engine.database_query(conn_id, "SELECT * FROM users WHERE id = ?", [42])</code></pre>
 
       <div class="method-sig"><code>engine.database_disconnect(connection_id)</code></div>
@@ -174,7 +174,7 @@ results = engine.run_scenario(main_scenario, users=100, duration=60)</code></pre
       <h3 id="websocket-methods">WebSocket Methods</h3>
 
       <div class="method-sig"><code>engine.websocket_connect(url, headers=None)</code></div>
-      <p>Initiate a WebSocket connection (simulated in Phase 1). Returns a connection ID string.</p>
+      <p>Open a WebSocket connection — real RFC 6455 via libcurl's WebSocket API when built with <code>HAVE_CURL_WEBSOCKETS</code>, simulated otherwise. Returns a connection ID string.</p>
 
       <div class="method-sig"><code>engine.websocket_send(connection_id, message)</code></div>
       <p>Send a message over the WebSocket connection.</p>

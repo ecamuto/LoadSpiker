@@ -69,7 +69,7 @@
         <div class="protocol-card">
           <div class="protocol-icon">🔄</div>
           <div class="protocol-name">WebSocket</div>
-          <div class="protocol-status status-simulated">Simulated</div>
+          <div class="protocol-status status-real">Real (libcurl WS)</div>
         </div>
         <div class="protocol-card">
           <div class="protocol-icon">🔗</div>
@@ -89,7 +89,7 @@
         <div class="protocol-card">
           <div class="protocol-icon">🗄️</div>
           <div class="protocol-name">Database</div>
-          <div class="protocol-status status-simulated">Simulated</div>
+          <div class="protocol-status status-real">PostgreSQL real</div>
         </div>
       </div>
 
@@ -151,8 +151,8 @@ results = engine.run_scenario(scenario, users=50, duration=60)</code></pre>
       <!-- ===================== WEBSOCKET ===================== -->
       <h2 id="websocket">WebSocket</h2>
 
-      <div class="callout warn">
-        <strong>Phase 1 Simulation:</strong> WebSocket in the current release measures connection overhead and timing without requiring <code>libwebsockets</code>. Real message exchange over a live WS server will be available in Phase 2. The API surface is identical to the planned final API, so your test code will not need to change.
+      <div class="callout">
+        <strong>Real RFC 6455:</strong> WebSocket exchanges real frames over a live server via libcurl's WebSocket API (<code>curl_ws_send</code>/<code>curl_ws_recv</code>, <code>CONNECT_ONLY=2</code>), built when libcurl ships WebSocket support (<code>HAVE_CURL_WEBSOCKETS</code>). Where libcurl lacks WS support the build falls back to the simulated path (connection/timing only); the API surface is identical either way.
       </div>
 
       <pre><code class="language-python">from loadspiker import Engine
@@ -351,8 +351,8 @@ engine.mqtt_disconnect(mqtt_id)</code></pre>
       <!-- ===================== DATABASE ===================== -->
       <h2 id="database">Database</h2>
 
-      <div class="callout warn">
-        <strong>Simulation Notice:</strong> Database support in Phase 1 simulates connection pool overhead and query timing without real database drivers. This measures your application's connection handling and pool exhaustion behavior under load. Real driver integration (MySQL, PostgreSQL, MongoDB) is planned for Phase 2.
+      <div class="callout">
+        <strong>PostgreSQL is real:</strong> when built with libpq (<code>HAVE_LIBPQ</code>), PostgreSQL connects and queries for real via <code>PQconnectdb</code>/<code>PQexec</code>. MySQL and MongoDB remain simulated (no client library linked) &mdash; they model connection-pool overhead and query timing so you can exercise pool exhaustion and connection handling under load. Connections are isolated per virtual user via <code>conn_id</code>.
       </div>
 
       <h3>Connection Strings</h3>

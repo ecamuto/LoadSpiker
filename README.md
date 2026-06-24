@@ -18,8 +18,9 @@ by plain Python.
 - **C engine on the hot path** — worker-thread pool, libcurl HTTP, connection
   pooling, and a microsecond-resolution latency histogram (p95/p99).
 - **Python scripting** — author scenarios, assertions, and reporting in Python.
-- **Multi-protocol** — HTTP/HTTPS, TCP, UDP, MQTT (real), plus WebSocket and
-  Database (currently *simulated* — see the capability matrix below).
+- **Multi-protocol** — HTTP/HTTPS, TCP, UDP, MQTT (real); real RFC 6455
+  WebSocket and real PostgreSQL where the build finds libcurl's WebSocket API
+  and libpq (MySQL/MongoDB still simulated — see the capability matrix below).
 - **Session management** — thread-safe per-user session storage, cookie
   handling, and response→variable correlation.
 - **Authentication flows** — Basic, Bearer, API Key, Form, OAuth 2.0, Custom.
@@ -38,21 +39,24 @@ or a **pure-Python fallback**. What each protocol actually does today:
 | Protocol | C engine | Python fallback | Notes |
 | -------- | -------- | --------------- | ----- |
 | HTTP/HTTPS | ✅ real (libcurl) | ✅ real (`requests`) | Full request queue + worker pool in C. |
-| TCP | ✅ real sockets | ✅ real sockets | Connection pool; text payloads (binary/NUL truncation is a known limit). |
+| TCP | ✅ real sockets | ✅ real sockets | Connection pool; binary payloads with embedded NULs send in full. |
 | UDP | ✅ real sockets | ✅ real sockets | Endpoint pool. |
 | MQTT | ✅ real MQTT 3.1.1 over TCP | ⚠️ simulated | Hand-rolled CONNECT/PUBLISH/SUBSCRIBE packets. |
-| WebSocket | ⚠️ **simulated** | ⚠️ not implemented | No real RFC 6455 handshake/frames yet. |
-| Database | ⚠️ **simulated** | ⚠️ not implemented | Parses connection strings, returns canned results; no real driver. |
+| WebSocket | ✅ real RFC 6455 (libcurl WS) / ⚠️ simulated fallback | ⚠️ not implemented | Real frames via libcurl's WebSocket API when built with `HAVE_CURL_WEBSOCKETS`; simulated where libcurl lacks WS support. |
+| Database | ✅ real PostgreSQL (libpq) / ⚠️ simulated | ⚠️ not implemented | Real connect/query via libpq when built with `HAVE_LIBPQ`. MySQL/MongoDB still simulated (no client linked). |
 
-> The simulated protocols return realistic-looking responses and timings so you
-> can build and validate scenarios, but they do not talk to a real server.
+> Where a protocol falls back to simulation it returns realistic-looking
+> responses and timings so you can build and validate scenarios, but it does not
+> talk to a real server. The build degrades gracefully: `setup.py` probes
+> `curl-config`/`pg_config` and defines `HAVE_CURL_WEBSOCKETS` / `HAVE_LIBPQ`
+> only when those are present.
 > Tracked in the [Contributor Guide](docs/CONTRIBUTOR_GUIDE.md#8-known-gaps--refactor-todo).
 
 ## Additional documentation
 
-A static HTML site also ships in `docs/site/` (`open docs/site/index.html`).
-Note that some of its protocol pages predate the capability matrix above; when
-in doubt, this README and the Contributor Guide are authoritative.
+A static HTML site also ships in `docs/site/` (`open docs/site/index.html`); its
+protocol/architecture/API pages are reconciled with the capability matrix above.
+When in doubt, this README and the Contributor Guide are authoritative.
 
 ## Quick Start
 

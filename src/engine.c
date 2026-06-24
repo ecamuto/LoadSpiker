@@ -54,9 +54,10 @@ struct engine {
     struct timeval test_start_time;  /* wall-clock time when load test started */
 };
 
-static size_t write_callback(void* contents, size_t size, size_t nmemb, response_buffer_t* buffer) {
+static size_t write_callback(char* contents, size_t size, size_t nmemb, void* userdata) {
+    response_buffer_t* buffer = (response_buffer_t*)userdata;
     size_t total_size = size * nmemb;
-    
+
     if (!buffer || !buffer->data || !contents) {
         return 0;
     }
@@ -82,9 +83,10 @@ static size_t write_callback(void* contents, size_t size, size_t nmemb, response
     return total_size;
 }
 
-static size_t header_callback(void* contents, size_t size, size_t nmemb, header_buffer_t* buffer) {
+static size_t header_callback(char* contents, size_t size, size_t nmemb, void* userdata) {
+    header_buffer_t* buffer = (header_buffer_t*)userdata;
     size_t total_size = size * nmemb;
-    
+
     if (!buffer || !buffer->data || !contents) {
         return 0;
     }
@@ -385,7 +387,7 @@ static void http_execute(const http_request_t* request, http_response_t* respons
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
     curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, request->timeout_ms > 0 ? request->timeout_ms : 30000);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)(request->timeout_ms > 0 ? request->timeout_ms : 30000));
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
 

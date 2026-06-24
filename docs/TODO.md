@@ -112,8 +112,11 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       breakage: `tests/tsan_check.c` still used the pre-isolation 3-arg
       `database_connect`; updated to the `conn_id` signature so `make tsan`
       compiles again.
-- [ ] 🟡 **Regression tests for security fixes.** Add tests for MQTT over-length
-      rejection (V1–V3), the refcount-leak fix (V9), and ephemeral UDP port.
+- [x] 🟡 **Regression tests for security fixes.** Added
+      `tests/test_security_regressions.py` (6 tests, skipped when only the Python
+      fallback is present): MQTT over-length CONNECT/PUBLISH/SUBSCRIBE rejection
+      (V1–V3), a stable-ephemeral-source-port check for UDP endpoints (V11), and
+      a coarse object-count guard against the dict-building refcount leak (V9).
 - [x] 🟡 **CI.** Added `.github/workflows/ci.yml` (ubuntu, Python 3.13): installs
       libcurl/libpq, builds the extension in place, runs `pytest`, then `make
       tsan` and `make test-asan`. Also fixed a malformed `requirements.txt`

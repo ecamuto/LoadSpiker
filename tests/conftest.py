@@ -23,6 +23,27 @@ from loadspiker import Engine
 
 
 # ---------------------------------------------------------------------------
+# Test isolation
+# ---------------------------------------------------------------------------
+# The C engine's TCP/UDP/MQTT/Database/WebSocket connection pools are
+# process-global static state, not per-engine. Without a reset, slots leak
+# across tests: when the OS recycles an ephemeral port, a later test can match
+# a stale slot still flagged is_connected with a now-closed fd, so connect()
+# reports "already established" on a dead socket and the following send/receive
+# fails intermittently. Reset the pools before every test so each starts clean.
+
+@pytest.fixture(scope="session")
+def _pool_resetter():
+    return Engine(max_connections=1, worker_threads=1)
+
+
+@pytest.fixture(autouse=True)
+def _reset_protocol_pools(_pool_resetter):
+    _pool_resetter.reset_connection_pools()
+    yield
+
+
+# ---------------------------------------------------------------------------
 # Engine fixtures
 # ---------------------------------------------------------------------------
 

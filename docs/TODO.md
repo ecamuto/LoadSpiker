@@ -119,14 +119,19 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 
 ## 6. Verification gaps
 
-- [ ] 🟠 **Flaky TCP/UDP pool tests (pre-existing).** `tests/` passes on a fresh
-      run but `TestTCPProtocol::test_tcp_send_receive` (and sibling socket tests)
-      fail intermittently on repeated runs — present at HEAD, **not** introduced
-      by the root-script cleanup. Root cause: the C TCP/UDP/MQTT connection pools
-      are process-global statics and tests connect without always disconnecting,
-      so slots accumulate within a run. This will make CI flaky; fix with
-      per-test teardown (disconnect/cleanup) or a pool-reset hook. Reproduce: run
-      `pytest tests/` 3× in a row.
+- [x] 🟠 **Flaky TCP/UDP pool tests — fixed.** Root cause: the C
+      TCP/UDP/MQTT/Database/WebSocket pools are process-global statics. When the
+      OS recycled an ephemeral port, a later test matched a stale slot still
+      flagged `is_connected` with a now-closed fd, so `tcp_connect` returned
+      "already established" on a dead socket and the next send/receive failed.
+      Fix: exposed the existing `*_cleanup_all()` functions through a new
+      `Engine.reset_connection_pools()` (C method `reset_connection_pools`), and
+      added an autouse conftest fixture that resets the pools before every test.
+      Isolated suite runs are now green 3×/3× (217 passed). Caveat: hammering the
+      full suite many times back-to-back can still fail via real ephemeral-port
+      exhaustion (sockets in TIME_WAIT) — an environment limit, not a code bug,
+      and absent in isolated CI runs. A deeper hardening would be to liveness-
+      check the fd before honouring an "already established" slot.
 
 - [x] 🟠 **Run AddressSanitizer.** Done. `make test-asan` now builds a standalone
       natively-instrumented harness (`tests/asan_check.c`, mirroring the tsan

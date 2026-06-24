@@ -1187,8 +1187,19 @@ class Engine:
     def reset_metrics(self):
         """Reset performance metrics"""
         self._engine.reset_metrics()
-    
-    def run_custom_test(self, test_func: Callable, users: int = 10, 
+
+    def reset_connection_pools(self):
+        """Reset all process-global protocol connection pools.
+
+        The C engine keeps TCP/UDP/MQTT/Database/WebSocket pools as process-wide
+        state, not per-engine. Tests (and any caller wanting a clean slate)
+        should call this to avoid stale slots leaking across runs.
+        """
+        reset = getattr(self._engine, "reset_connection_pools", None)
+        if callable(reset):
+            reset()
+
+    def run_custom_test(self, test_func: Callable, users: int = 10,
                        duration: int = 60) -> Dict[str, Any]:
         """
         Run a custom test function

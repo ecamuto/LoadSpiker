@@ -4,6 +4,9 @@
 #include "engine.h"
 #include "protocols/tcp.h"
 #include "protocols/udp.h"
+#include "protocols/mqtt.h"
+#include "protocols/database.h"
+#include "protocols/websocket.h"
 
 typedef struct {
     PyObject_HEAD
@@ -746,6 +749,21 @@ static PyObject* LoadTestEngine_database_disconnect(LoadTestEngineObject* self, 
 
 #define KW_METH(name) (PyCFunction)(void(*)(void))name, METH_VARARGS | METH_KEYWORDS
 
+/* Reset all process-global protocol connection pools (close sockets, clear
+   slots). The pools are static across the whole process, not per-engine, so
+   this clears state that would otherwise leak between independent tests/runs. */
+static PyObject* LoadTestEngine_reset_connection_pools(LoadTestEngineObject* self, PyObject* Py_UNUSED(ignored)) {
+    (void)self;
+    Py_BEGIN_ALLOW_THREADS
+    tcp_cleanup_all();
+    udp_cleanup_all();
+    mqtt_cleanup_all();
+    database_cleanup_all();
+    websocket_cleanup_all();
+    Py_END_ALLOW_THREADS
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef LoadTestEngine_methods[] = {
     {"execute_request", KW_METH(LoadTestEngine_execute_request), "Execute a single HTTP request"},
     {"start_load_test", KW_METH(LoadTestEngine_start_load_test), "Start a load test with multiple requests"},
@@ -770,6 +788,7 @@ static PyMethodDef LoadTestEngine_methods[] = {
     {"database_connect", KW_METH(LoadTestEngine_database_connect), "Connect to a database"},
     {"database_query", KW_METH(LoadTestEngine_database_query), "Execute a database query"},
     {"database_disconnect", KW_METH(LoadTestEngine_database_disconnect), "Disconnect from a database"},
+    {"reset_connection_pools", (PyCFunction)LoadTestEngine_reset_connection_pools, METH_NOARGS, "Reset all process-global protocol connection pools"},
     {NULL, NULL, 0, NULL}
 };
 

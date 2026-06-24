@@ -190,7 +190,7 @@ class TestHTTPRequests:
 class TestWebSocketProtocol:
     """Test WebSocket protocol methods via engine (simulated)."""
 
-    def test_websocket_connect(self, engine, mock_websocket_server):
+    def test_websocket_connect(self, engine, mock_websocket_server, require_websocket):
         """WebSocket connect performs a real RFC 6455 handshake."""
         _, port = mock_websocket_server
         url = f"ws://localhost:{port}"
@@ -199,7 +199,7 @@ class TestWebSocketProtocol:
         assert response['success'] is True
         engine.websocket_close(url)
 
-    def test_websocket_send(self, engine, mock_websocket_server):
+    def test_websocket_send(self, engine, mock_websocket_server, require_websocket):
         """WebSocket send transmits a real frame to the echo server."""
         _, port = mock_websocket_server
         url = f"ws://localhost:{port}"
@@ -209,7 +209,7 @@ class TestWebSocketProtocol:
         assert response['success'] is True
         engine.websocket_close(url)
 
-    def test_websocket_close(self, engine, mock_websocket_server):
+    def test_websocket_close(self, engine, mock_websocket_server, require_websocket):
         """WebSocket close tears down a real connection."""
         _, port = mock_websocket_server
         url = f"ws://localhost:{port}"

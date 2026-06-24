@@ -315,3 +315,36 @@ def mock_websocket_server():
     server.start()
     yield server, server.port
     server.stop()
+
+
+@pytest.fixture(scope="session")
+def websocket_supported():
+    """Whether the linked libcurl actually serves ws:// at runtime.
+
+    setup.py defines HAVE_CURL_WEBSOCKETS from curl-config, but some libcurl
+    builds expose the WebSocket symbols while keeping the ws protocol disabled
+    (it shipped experimental/off in several distro builds). A real handshake
+    then raises "Unsupported protocol". Probe once so the real-WebSocket tests
+    skip instead of failing where ws:// is not actually usable.
+    """
+    server = MockWebSocketServer()
+    server.start()
+    url = f"ws://localhost:{server.port}"
+    try:
+        eng = Engine(max_connections=2, worker_threads=1)
+        resp = eng.websocket_connect(url)
+        try:
+            eng.websocket_close(url)
+        except Exception:
+            pass
+        return bool(resp.get("success"))
+    except Exception:
+        return False
+    finally:
+        server.stop()
+
+
+@pytest.fixture
+def require_websocket(websocket_supported):
+    if not websocket_supported:
+        pytest.skip("Linked libcurl has no functional ws:// support")

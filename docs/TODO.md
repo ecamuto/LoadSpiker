@@ -101,8 +101,17 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
 
 ## 6. Verification gaps
 
-- [ ] 🟠 **Run AddressSanitizer.** `make test-asan` has not been run this pass;
-      the V1–V3/V9 fixes were verified by code review + tests, not by ASan.
+- [x] 🟠 **Run AddressSanitizer.** Done. `make test-asan` now builds a standalone
+      natively-instrumented harness (`tests/asan_check.c`, mirroring the tsan
+      target) — injecting ASan into stock CPython on macOS loads the runtime too
+      late ("Interceptors are not working"). The harness drives the MQTT
+      CONNECT/PUBLISH/SUBSCRIBE encoders (V1–V3) at their maximum permitted input
+      lengths plus the over-length rejection guards; ASan reports no memory
+      errors. Caveat: V9 (Python refcount leak) needs a live interpreter and is
+      not covered here — macOS also lacks LeakSanitizer. Also fixed a latent
+      breakage: `tests/tsan_check.c` still used the pre-isolation 3-arg
+      `database_connect`; updated to the `conn_id` signature so `make tsan`
+      compiles again.
 - [ ] 🟡 **Regression tests for security fixes.** Add tests for MQTT over-length
       rejection (V1–V3), the refcount-leak fix (V9), and ephemeral UDP port.
 - [ ] 🟡 **CI.** No CI config; add one that runs `make test` + `make tsan`.

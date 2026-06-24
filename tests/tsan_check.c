@@ -92,15 +92,16 @@ static void *mqtt_thread_func(void *arg)
 static void *db_thread_func(void *arg)
 {
     thread_arg_t *targ = (thread_arg_t *)arg;
-    (void)targ;
+    char conn_id[64];
+    snprintf(conn_id, sizeof(conn_id), "tsan_db_%d", targ->idx);
 
     for (int i = 0; i < ITERATIONS; i++) {
         response_t resp;
         memset(&resp, 0, sizeof(resp));
-        database_connect("mysql://127.0.0.1:3306/test", "mysql", &resp);
+        database_connect("mysql://127.0.0.1:3306/test", conn_id, "mysql", &resp);
 
         memset(&resp, 0, sizeof(resp));
-        database_disconnect("mysql://127.0.0.1:3306/test", &resp);
+        database_disconnect("mysql://127.0.0.1:3306/test", conn_id, &resp);
     }
     return NULL;
 }

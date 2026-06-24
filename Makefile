@@ -187,13 +187,51 @@ test: install
 	python3 -m pytest tests/ -v
 	@echo "✅ Tests completed"
 
-# Run tests with AddressSanitizer (memory error detection)
-test-asan: debug
-	@echo "🔍 Running tests with AddressSanitizer..."
-	LOADSPIKER_DEBUG=1 python3 setup.py build_ext --inplace 2>&1 | tail -1
-	ASAN_OPTIONS=detect_leaks=1:abort_on_error=0:halt_on_error=0 \
-		python3 -m pytest tests/ -v --timeout=30 2>&1 || true
-	@echo "✅ ASan tests completed"
+# Run AddressSanitizer over the memory-sensitive C paths (memory error detection).
+#
+# We do NOT inject ASan into CPython: on macOS the runtime loads too late through
+# a stock interpreter ("Interceptors are not working"). Instead — mirroring the
+# tsan target — we build a standalone, natively-instrumented harness
+# (tests/asan_check.c) whose main() initializes ASan first. It drives the MQTT
+# CONNECT/PUBLISH/SUBSCRIBE encoders (V1-V3) at their maximum input lengths.
+ASAN_FLAGS = -fsanitize=address -fno-omit-frame-pointer -g -O1 -Wall -Wextra -pthread
+ASAN_ENGINE_OBJS = $(BUILD_DIR)/engine_asan.o \
+    $(BUILD_DIR)/websocket_asan.o \
+    $(BUILD_DIR)/mqtt_asan.o \
+    $(BUILD_DIR)/database_asan.o \
+    $(BUILD_DIR)/tcp_asan.o \
+    $(BUILD_DIR)/udp_asan.o
+ASAN_CHECK_OBJ = $(BUILD_DIR)/asan_check.o
+ASAN_BIN = $(BUILD_DIR)/asan_check
+
+$(BUILD_DIR)/engine_asan.o: $(SRC_DIR)/engine.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) $(CURL_CFLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/websocket_asan.o: $(SRC_DIR)/protocols/websocket.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/mqtt_asan.o: $(SRC_DIR)/protocols/mqtt.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/database_asan.o: $(SRC_DIR)/protocols/database.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/tcp_asan.o: $(SRC_DIR)/protocols/tcp.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) -fPIC -c $< -o $@
+
+$(BUILD_DIR)/udp_asan.o: $(SRC_DIR)/protocols/udp.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) -fPIC -c $< -o $@
+
+$(ASAN_CHECK_OBJ): tests/asan_check.c | $(BUILD_DIR)
+	$(CC) $(ASAN_FLAGS) -fPIC -c $< -o $@
+
+$(ASAN_BIN): $(ASAN_ENGINE_OBJS) $(ASAN_CHECK_OBJ)
+	$(CC) $(ASAN_FLAGS) $(ASAN_ENGINE_OBJS) $(ASAN_CHECK_OBJ) $(CURL_LIBS) -o $@
+
+test-asan: $(ASAN_BIN)
+	@echo "🔍 Running AddressSanitizer harness..."
+	ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:halt_on_error=1 $(ASAN_BIN)
+	@echo "✅ ASan check passed - no memory errors detected"
 
 # Run all tests including slow/network tests
 test-all: install

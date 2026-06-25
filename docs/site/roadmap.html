@@ -89,6 +89,10 @@
         <li>Memory-safe C code: <code>strncpy</code>/<code>snprintf</code> everywhere, malloc NULL checks, cleanup functions</li>
       </ul>
 
+      <div class="callout">
+        <strong>Landed since Phase 1:</strong> a correctness &amp; protocol-I/O pass replaced several Phase 1 stubs with real implementations — RFC 6455 WebSocket via libcurl's WebSocket API (<code>HAVE_CURL_WEBSOCKETS</code>), real PostgreSQL via libpq (<code>HAVE_LIBPQ</code>; MySQL/MongoDB still simulated), binary/NUL-safe TCP/UDP sends, and per-user connection isolation. See the <a href="protocols.html">Protocols</a> page and the project README for the current capability matrix.
+      </div>
+
       <!-- ===================== PHASE 2 ===================== -->
       <h2 id="phase2">Phase 2: Advanced Testing Capabilities <span class="badge badge-yellow">PLANNED</span></h2>
 

@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debug build configuration with AddressSanitizer support
 - Detailed troubleshooting documentation
 - Enhanced memory safety in C engine core
+- **Real RFC 6455 WebSocket** via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`), GIL released during I/O; simulated fallback where libcurl lacks WS
+- **Real PostgreSQL** via libpq (`HAVE_LIBPQ`); per-user DB isolation via `conn_id`; MySQL/MongoDB still simulated
+- C-core ramp-up (`ramp_up_seconds`) with a duration-sustained load model (replaces the Python burst loop)
+- AddressSanitizer harness for the MQTT encoders (`make test-asan`, `tests/asan_check.c`)
+- Security regression tests (`tests/test_security_regressions.py`) and a GitHub Actions CI workflow
+- `Engine.reset_connection_pools()` to clear the process-global protocol pools
+- All non-HTTP protocols (TCP/UDP/MQTT/Database) bridged through the Python extension
 
 ### Fixed
 - Buffer overflow vulnerabilities in HTTP response handling
@@ -30,17 +37,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Segmentation faults in request execution
 - Uninitialized memory access in response buffers
 - Thread safety issues in worker queue management
+- MQTT packet-encoder stack overflows (over-length CONNECT/PUBLISH/SUBSCRIBE now rejected); CONNACK/SUBACK read-to-length validation
+- Binary/NUL-safe TCP/UDP sends (length carried instead of `strlen`)
+- Per-protocol pool concurrency: mutex narrowed to the slot lookup, blocking I/O outside the lock; per-user TCP/UDP/Database isolation
+- Python-layer audit: opt-in CSV type coercion, OAuth2 `state` validation, Bearer token redaction, HTMLReporter `</script>` escaping, CLI config key validation
+- Flaky socket tests (process-global pools reset between tests)
+- Malformed `requirements.txt` (`pkgconfig>=1.5.0pytest` collapsed onto one line)
 
 ### Changed
 - Improved error handling throughout C codebase
 - Enhanced buffer management with proper bounds checking
 - Better string handling with null termination guarantees
 - More robust memory allocation with error checking
+- Deduplicated protocol pool boilerplate into `src/protocols/pool_common.h`
+- Reconciled docs (README, `docs/site/*`, `docs/CODE_ANALYSIS.md`) with the real capability matrix
 
 ### Security
 - Fixed potential buffer overflows in write_callback function
 - Added proper input validation for all C function parameters
 - Improved memory initialization to prevent information leaks
+- SQL injection is now relevant for real PostgreSQL (`PQexec`): scenarios should use parameterized queries / trusted literals — see `docs/CODE_ANALYSIS.md`
 
 ## [1.0.0] - TBD
 

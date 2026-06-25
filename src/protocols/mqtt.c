@@ -1,4 +1,5 @@
 #include "mqtt.h"
+#include "pool_common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -22,6 +23,24 @@ static inline unsigned int get_thread_seed(void) {
         if (thread_rng_seed == 0) thread_rng_seed = 1; /* avoid all-zero seed */
     }
     return thread_rng_seed;
+}
+
+/* Read exactly len bytes, looping over short reads so a control packet split
+   across TCP segments is not mistaken for a failure. Returns len on success,
+   -1 on error, or a short count (< len) if the peer closed early. */
+static ssize_t mqtt_recv_full(int fd, void* buf, size_t len) {
+    size_t total = 0;
+    char* p = (char*)buf;
+    while (total < len) {
+        ssize_t n = recv(fd, p + total, len - total, 0);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        if (n == 0) break; /* peer closed connection */
+        total += (size_t)n;
+    }
+    return (ssize_t)total;
 }
 
 // Connection pool for MQTT connections
@@ -101,9 +120,7 @@ mqtt_connection_t* mqtt_find_connection(const char* host, int port, const char* 
     pthread_mutex_lock(&mqtt_pool_mutex);
     mqtt_connection_t* result = NULL;
     for (int i = 0; i < mqtt_connection_count; i++) {
-        if (strcmp(mqtt_connections[i].host, host) == 0 &&
-            mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
+        if (POOL_SLOT_MATCHES(mqtt_connections[i], host, port, client_id, client_id)) {
             result = &mqtt_connections[i];
             break;
         }
@@ -114,11 +131,8 @@ mqtt_connection_t* mqtt_find_connection(const char* host, int port, const char* 
 
 mqtt_connection_t* mqtt_create_connection(const char* host, int port, const char* client_id) {
     pthread_mutex_lock(&mqtt_pool_mutex);
-    if (mqtt_connection_count >= MAX_MQTT_CONNECTIONS) {
-        if (!mqtt_pool_warned) {
-            fprintf(stderr, "[LoadSpiker] MQTT pool full — increase MAX_MQTT_CONNECTIONS\n");
-            mqtt_pool_warned = 1;
-        }
+    if (pool_reserve_full(mqtt_connection_count, MAX_MQTT_CONNECTIONS,
+                          &mqtt_pool_warned, "MQTT", "MAX_MQTT_CONNECTIONS")) {
         pthread_mutex_unlock(&mqtt_pool_mutex);
         return NULL;
     }
@@ -263,6 +277,43 @@ static int mqtt_create_publish_packet(char* buffer, const char* topic,
     return pos;
 }
 
+/* Find a connection slot for (host, port, client_id). Caller MUST hold the
+   mqtt_pool_mutex. */
+static mqtt_connection_t* mqtt_find_locked(const char* host, int port, const char* client_id) {
+    for (int i = 0; i < mqtt_connection_count; i++) {
+        if (POOL_SLOT_MATCHES(mqtt_connections[i], host, port, client_id, client_id)) {
+            return &mqtt_connections[i];
+        }
+    }
+    return NULL;
+}
+
+/* Find or reserve a slot. Caller MUST hold the mqtt_pool_mutex. Returns NULL if
+   the pool is full. A reserved slot starts disconnected with socket_fd = -1.
+   Slots are appended and never removed, so a pointer obtained under the lock
+   stays valid for the process lifetime — letting us release the mutex before
+   blocking I/O (a failed connect just leaves the slot disconnected for reuse). */
+static mqtt_connection_t* mqtt_find_or_reserve_locked(const char* host, int port, const char* client_id) {
+    mqtt_connection_t* conn = mqtt_find_locked(host, port, client_id);
+    if (conn) return conn;
+
+    if (pool_reserve_full(mqtt_connection_count, MAX_MQTT_CONNECTIONS,
+                          &mqtt_pool_warned, "MQTT", "MAX_MQTT_CONNECTIONS")) {
+        return NULL;
+    }
+
+    conn = &mqtt_connections[mqtt_connection_count++];
+    memset(conn, 0, sizeof(mqtt_connection_t));
+    strncpy(conn->host, host, sizeof(conn->host) - 1);
+    conn->port = port;
+    strncpy(conn->client_id, client_id, sizeof(conn->client_id) - 1);
+    conn->socket_fd = -1;
+    conn->is_connected = false;
+    conn->packet_id = 1;
+    conn->keep_alive_seconds = 60;
+    return conn;
+}
+
 int mqtt_connect(const char* host, int port, const char* client_id,
                 const char* username, const char* password,
                 int keep_alive_seconds, response_t* response) {
@@ -270,68 +321,55 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         return -1;
     }
 
-    pthread_mutex_lock(&mqtt_pool_mutex);
-
     memset(response, 0, sizeof(response_t));
     response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
 
-    // Check if connection already exists (inline find — mutex already held)
-    bool new_entry = false;
-    mqtt_connection_t* conn = NULL;
-    for (int i = 0; i < mqtt_connection_count; i++) {
-        if (strcmp(mqtt_connections[i].host, host) == 0 &&
-            mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
-            conn = &mqtt_connections[i];
-            break;
-        }
+    /* Bound-check inputs (params only) before building the fixed-size CONNECT
+       packet (1024 B). Caps guarantee the builder can never overflow. */
+    if (strlen(client_id) > MAX_MQTT_CLIENT_ID_LENGTH - 1 ||
+        (username && strlen(username) > MAX_MQTT_USERNAME_LENGTH - 1) ||
+        (password && strlen(password) > MAX_MQTT_PASSWORD_LENGTH - 1)) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT client_id/username/password too long");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
     }
-    if (conn && conn->is_connected) {
+
+    /* --- Critical section 1: find/reserve the slot --- */
+    pthread_mutex_lock(&mqtt_pool_mutex);
+    mqtt_connection_t* conn = mqtt_find_or_reserve_locked(host, port, client_id);
+    if (!conn) {
+        pthread_mutex_unlock(&mqtt_pool_mutex);
+        response->status_code = 500;
+        response->success = false;
+        strcpy(response->error_message, "Too many MQTT connections");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+    if (conn->is_connected) {
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 200;
         response->success = true;
         snprintf(response->body, sizeof(response->body),
                 "MQTT connection already established to %s:%d with client ID %s",
                 host, port, client_id);
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return 0;
     }
+    pthread_mutex_unlock(&mqtt_pool_mutex);
 
-    if (!conn) {
-        if (mqtt_connection_count >= MAX_MQTT_CONNECTIONS) {
-            if (!mqtt_pool_warned) {
-                fprintf(stderr, "[LoadSpiker] MQTT pool full — increase MAX_MQTT_CONNECTIONS\n");
-                mqtt_pool_warned = 1;
-            }
-            response->status_code = 500;
-            response->success = false;
-            strcpy(response->error_message, "Too many MQTT connections");
-            response->response_time_us = get_time_us() - start_time;
-            pthread_mutex_unlock(&mqtt_pool_mutex);
-            return -1;
-        }
-        conn = &mqtt_connections[mqtt_connection_count++];
-        memset(conn, 0, sizeof(mqtt_connection_t));
-        strncpy(conn->host, host, sizeof(conn->host) - 1);
-        conn->port = port;
-        strncpy(conn->client_id, client_id, sizeof(conn->client_id) - 1);
-        conn->is_connected = false;
-        conn->socket_fd = -1;
-        conn->packet_id = 1;
-        conn->keep_alive_seconds = 60;
-        new_entry = true;
-    }
-
-    // Create socket
-    conn->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (conn->socket_fd < 0) {
+    /* --- Blocking work happens WITHOUT the pool mutex held. The reserved slot
+       stays disconnected (socket_fd = -1) until we publish a live socket, so an
+       error path can simply return — no slot mutation needed. --- */
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to create socket: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
@@ -344,26 +382,24 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     hints.ai_socktype = SOCK_STREAM;
     int gai_err = getaddrinfo(host, port_str, &hints, &res);
     if (gai_err != 0) {
-        close(conn->socket_fd);
+        close(fd);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "DNS resolution failed for %s: %s", host, gai_strerror(gai_err));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
     // Connect to server
-    if (connect(conn->socket_fd, res->ai_addr, res->ai_addrlen) < 0) {
+    if (connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
         freeaddrinfo(res);
-        close(conn->socket_fd);
+        close(fd);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to connect to MQTT broker: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
@@ -374,34 +410,26 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     int packet_len = mqtt_create_connect_packet(connect_packet, client_id,
                                                username, password, keep_alive_seconds);
 
-    if (send(conn->socket_fd, connect_packet, packet_len, 0) < 0) {
-        close(conn->socket_fd);
+    if (send(fd, connect_packet, packet_len, 0) < 0) {
+        close(fd);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to send CONNECT packet: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
     /* Read CONNACK — MQTT 3.1.1 §3.2: fixed 4 bytes: 0x20 0x02 <ack_flags> <return_code> */
     char connack[4];
-    ssize_t connack_len = recv(conn->socket_fd, connack, sizeof(connack), 0);
+    ssize_t connack_len = mqtt_recv_full(fd, connack, sizeof(connack));
     if (connack_len < 0) {
-        close(conn->socket_fd);
-        conn->socket_fd = -1;
-        /* Remove pool entry only if it was newly allocated for this call */
-        if (new_entry) {
-            mqtt_connection_count--;
-            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
-        }
+        close(fd);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to receive CONNACK: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
     if (connack_len < 4 ||
@@ -409,13 +437,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         (unsigned char)connack[1] != 0x02 ||
         (unsigned char)connack[2] != 0x00 ||
         (unsigned char)connack[3] != 0x00) {
-        close(conn->socket_fd);
-        conn->socket_fd = -1;
-        /* Remove pool entry — bad CONNACK means connection was rejected; leave no half-open slot */
-        if (new_entry) {
-            mqtt_connection_count--;
-            memset(&mqtt_connections[mqtt_connection_count], 0, sizeof(mqtt_connection_t));
-        }
+        close(fd);
         response->status_code = 500;
         response->success = false;
         if (connack_len >= 4 && (unsigned char)connack[0] == 0x20 && (unsigned char)connack[1] == 0x02) {
@@ -431,11 +453,12 @@ int mqtt_connect(const char* host, int port, const char* client_id,
                     connack_len);
         }
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
-    // Mark connection as established
+    /* --- Critical section 2: publish the live socket into the slot --- */
+    pthread_mutex_lock(&mqtt_pool_mutex);
+    conn->socket_fd = fd;
     conn->is_connected = true;
     conn->keep_alive_seconds = keep_alive_seconds;
     if (username) strncpy(conn->username, username, sizeof(conn->username) - 1);
@@ -443,6 +466,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     // The password was already used in the CONNECT packet above
     // Storing it in memory would be a security risk (memory dumps, core dumps, debugging)
     memset(conn->password, 0, sizeof(conn->password));
+    pthread_mutex_unlock(&mqtt_pool_mutex);
 
     response->status_code = 200;
     response->success = true;
@@ -472,44 +496,50 @@ int mqtt_publish(const char* host, int port, const char* client_id,
         return -1;
     }
 
-    pthread_mutex_lock(&mqtt_pool_mutex);
-
     memset(response, 0, sizeof(response_t));
     response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
 
-    // Find existing connection
-    mqtt_connection_t* conn = NULL;
-    for (int i = 0; i < mqtt_connection_count; i++) {
-        if (strcmp(mqtt_connections[i].host, host) == 0 &&
-            mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
-            conn = &mqtt_connections[i];
-            break;
-        }
+    /* Bound-check topic+payload (params only) before building the fixed buffer. */
+    if (strlen(topic) > MAX_MQTT_TOPIC_LENGTH - 1 ||
+        strlen(message) > MAX_MQTT_MESSAGE_LENGTH - 1) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT topic or payload too long");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
     }
+
+    /* --- Critical section: find the connection, capture fd + packet_id --- */
+    pthread_mutex_lock(&mqtt_pool_mutex);
+    mqtt_connection_t* conn = mqtt_find_locked(host, port, client_id);
     if (!conn || !conn->is_connected) {
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 400;
         response->success = false;
         strcpy(response->error_message, "No active MQTT connection");
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
+    int fd = conn->socket_fd;
+    uint16_t packet_id = conn->packet_id++;
+    pthread_mutex_unlock(&mqtt_pool_mutex);
 
     // Create PUBLISH packet
     char publish_packet[MAX_MQTT_MESSAGE_LENGTH + 512];
     int packet_len = mqtt_create_publish_packet(publish_packet, topic, message,
-                                               qos, retain, conn->packet_id++);
+                                               qos, retain, packet_id);
 
-    // Send PUBLISH packet
-    if (send(conn->socket_fd, publish_packet, packet_len, 0) < 0) {
+    // Send PUBLISH packet (without the pool mutex held)
+    if (send(fd, publish_packet, packet_len, 0) < 0) {
+        pthread_mutex_lock(&mqtt_pool_mutex);
+        if (conn->socket_fd == fd) conn->is_connected = false;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to send PUBLISH packet: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
@@ -530,7 +560,6 @@ int mqtt_publish(const char* host, int port, const char* client_id,
     mqtt_data->retained = retain;
     mqtt_data->publish_time_us = get_time_us() - start_time;
 
-    pthread_mutex_unlock(&mqtt_pool_mutex);
     return 0;
 }
 
@@ -578,68 +607,74 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
         return -1;
     }
 
-    pthread_mutex_lock(&mqtt_pool_mutex);
-
     memset(response, 0, sizeof(response_t));
     response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
 
-    // Find existing connection
-    mqtt_connection_t* conn = NULL;
-    for (int i = 0; i < mqtt_connection_count; i++) {
-        if (strcmp(mqtt_connections[i].host, host) == 0 &&
-            mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
-            conn = &mqtt_connections[i];
-            break;
-        }
+    /* Bound-check topic (param only) before building the 512-byte buffer. */
+    if (strlen(topic) > MAX_MQTT_TOPIC_LENGTH - 1) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT topic too long");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
     }
+
+    /* --- Critical section: find the connection, capture fd + packet_id --- */
+    pthread_mutex_lock(&mqtt_pool_mutex);
+    mqtt_connection_t* conn = mqtt_find_locked(host, port, client_id);
     if (!conn || !conn->is_connected) {
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 400;
         response->success = false;
         strcpy(response->error_message, "No active MQTT connection");
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
+    int fd = conn->socket_fd;
+    uint16_t packet_id = conn->packet_id++;
+    pthread_mutex_unlock(&mqtt_pool_mutex);
 
     // Create SUBSCRIBE packet
     char subscribe_packet[512];
-    uint16_t packet_id = conn->packet_id++;
     int packet_len = mqtt_create_subscribe_packet(subscribe_packet, topic, qos, packet_id);
 
-    // Send SUBSCRIBE packet
-    if (send(conn->socket_fd, subscribe_packet, packet_len, 0) < 0) {
+    // Send SUBSCRIBE packet (without the pool mutex held)
+    if (send(fd, subscribe_packet, packet_len, 0) < 0) {
+        pthread_mutex_lock(&mqtt_pool_mutex);
+        if (conn->socket_fd == fd) conn->is_connected = false;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to send SUBSCRIBE packet: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
-    // Read SUBACK response
+    // Read SUBACK response (without the pool mutex held)
     char suback[5];
-    int recv_len = recv(conn->socket_fd, suback, sizeof(suback), 0);
+    ssize_t recv_len = mqtt_recv_full(fd, suback, sizeof(suback));
     if (recv_len < 0) {
+        pthread_mutex_lock(&mqtt_pool_mutex);
+        if (conn->socket_fd == fd) conn->is_connected = false;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to receive SUBACK: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
-    // Verify SUBACK packet type
-    if ((suback[0] & 0xF0) != MQTT_SUBACK) {
+    // Verify SUBACK packet type (and that we got the full fixed-size packet)
+    if (recv_len < (ssize_t)sizeof(suback) || (suback[0] & 0xF0) != MQTT_SUBACK) {
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
-                "Invalid SUBACK response (got 0x%02X)", (unsigned char)suback[0]);
+                "Invalid SUBACK response (got 0x%02X, len=%zd)",
+                recv_len > 0 ? (unsigned char)suback[0] : 0, recv_len);
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
@@ -654,7 +689,6 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
     strncpy(mqtt_data->topic, topic, sizeof(mqtt_data->topic) - 1);
     mqtt_data->qos_level = qos;
 
-    pthread_mutex_unlock(&mqtt_pool_mutex);
     return 0;
 }
 
@@ -698,68 +732,74 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
         return -1;
     }
 
-    pthread_mutex_lock(&mqtt_pool_mutex);
-
     memset(response, 0, sizeof(response_t));
     response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
 
-    // Find existing connection
-    mqtt_connection_t* conn = NULL;
-    for (int i = 0; i < mqtt_connection_count; i++) {
-        if (strcmp(mqtt_connections[i].host, host) == 0 &&
-            mqtt_connections[i].port == port &&
-            strcmp(mqtt_connections[i].client_id, client_id) == 0) {
-            conn = &mqtt_connections[i];
-            break;
-        }
+    /* Bound-check topic (param only) before building the 512-byte buffer. */
+    if (strlen(topic) > MAX_MQTT_TOPIC_LENGTH - 1) {
+        response->status_code = 400;
+        response->success = false;
+        strcpy(response->error_message, "MQTT topic too long");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
     }
+
+    /* --- Critical section: find the connection, capture fd + packet_id --- */
+    pthread_mutex_lock(&mqtt_pool_mutex);
+    mqtt_connection_t* conn = mqtt_find_locked(host, port, client_id);
     if (!conn || !conn->is_connected) {
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 400;
         response->success = false;
         strcpy(response->error_message, "No active MQTT connection");
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
+    int fd = conn->socket_fd;
+    uint16_t packet_id = conn->packet_id++;
+    pthread_mutex_unlock(&mqtt_pool_mutex);
 
     // Create UNSUBSCRIBE packet
     char unsubscribe_packet[512];
-    uint16_t packet_id = conn->packet_id++;
     int packet_len = mqtt_create_unsubscribe_packet(unsubscribe_packet, topic, packet_id);
 
-    // Send UNSUBSCRIBE packet
-    if (send(conn->socket_fd, unsubscribe_packet, packet_len, 0) < 0) {
+    // Send UNSUBSCRIBE packet (without the pool mutex held)
+    if (send(fd, unsubscribe_packet, packet_len, 0) < 0) {
+        pthread_mutex_lock(&mqtt_pool_mutex);
+        if (conn->socket_fd == fd) conn->is_connected = false;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to send UNSUBSCRIBE packet: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
-    // Read UNSUBACK response
+    // Read UNSUBACK response (without the pool mutex held)
     char unsuback[4];
-    int recv_len = recv(conn->socket_fd, unsuback, sizeof(unsuback), 0);
+    ssize_t recv_len = mqtt_recv_full(fd, unsuback, sizeof(unsuback));
     if (recv_len < 0) {
+        pthread_mutex_lock(&mqtt_pool_mutex);
+        if (conn->socket_fd == fd) conn->is_connected = false;
+        pthread_mutex_unlock(&mqtt_pool_mutex);
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
                 "Failed to receive UNSUBACK: %s", strerror(errno));
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
-    // Verify UNSUBACK packet type
-    if ((unsuback[0] & 0xF0) != MQTT_UNSUBACK) {
+    // Verify UNSUBACK packet type (and that we got the full fixed-size packet)
+    if (recv_len < (ssize_t)sizeof(unsuback) || (unsuback[0] & 0xF0) != MQTT_UNSUBACK) {
         response->status_code = 500;
         response->success = false;
         snprintf(response->error_message, sizeof(response->error_message),
-                "Invalid UNSUBACK response (got 0x%02X)", (unsigned char)unsuback[0]);
+                "Invalid UNSUBACK response (got 0x%02X, len=%zd)",
+                recv_len > 0 ? (unsigned char)unsuback[0] : 0, recv_len);
         response->response_time_us = get_time_us() - start_time;
-        pthread_mutex_unlock(&mqtt_pool_mutex);
         return -1;
     }
 
@@ -769,7 +809,6 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
             "Unsubscribed from topic '%s'", topic);
     response->response_time_us = get_time_us() - start_time;
 
-    pthread_mutex_unlock(&mqtt_pool_mutex);
     return 0;
 }
 

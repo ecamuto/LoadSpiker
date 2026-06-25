@@ -1,1 +1,5 @@
-pkgconfig>=1.5.0pytest
+setuptools
+wheel
+pkgconfig>=1.5.0
+pytest
+requests

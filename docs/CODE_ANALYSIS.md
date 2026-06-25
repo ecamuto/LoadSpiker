@@ -6,16 +6,16 @@ This document provides an extensive analysis of the LoadSpiker codebase, a high-
 
 **Note:** Issues identified in the original analysis have been addressed:
 - **MQTT Password Storage**: Fixed - passwords are now zeroed after connection establishment
-- **SQL Injection in database.c**: Not applicable - database operations are simulated for load testing purposes, no real SQL is executed
+- **SQL Injection in database.c**: Now relevant for PostgreSQL. Real PostgreSQL queries run via libpq `PQexec` (when built with `HAVE_LIBPQ`); a query string assembled from untrusted data is injectable. Load-test scenarios author their own SQL, so treat query construction as caller responsibility and prefer parameterized queries / trusted literals. MySQL/MongoDB remain simulated (no SQL executed).
 - **TLS/SSL Support**: Documented as feature enhancement, not a vulnerability in current implementation
 - **Memory Management Issues**: Fixed - cleanup functions added to all protocol files (tcp_cleanup_all, udp_cleanup_all, mqtt_cleanup_all, websocket_cleanup_all, database_cleanup_all) and called from engine_destroy()
-- **Thread Safety Problems**: Analyzed and accepted for simulated protocol implementations - WebSocket uses mutex protection; connection counters are only modified during setup phase (before concurrent load testing); curl_global_init is thread-safe in modern libcurl (7.84.0+)
+- **Thread Safety Problems**: Hardened in the concurrency pass - per-pool mutexes narrowed to the slot lookup with blocking I/O outside the lock; per-user TCP/UDP/Database isolation; `getaddrinfo`/`rand_r` replace non-reentrant calls. Verified under ThreadSanitizer (`make tsan`). Real WebSocket (libcurl WS) and real PostgreSQL (libpq) release the GIL during I/O.
 - **Buffer Overflow Risks**: Analyzed and verified safe - all strncpy usages are preceded by zero-initialization (struct = {0} or memset); snprintf always null-terminates so truncation is not a buffer overflow; method buffers are sized appropriately (16 bytes in request_t, 8 bytes in legacy http_request_t fits all standard HTTP methods)
 - **Error Handling Deficiencies**: Analyzed and accepted - PyDict/PyLong NULL checks are theoretical OOM concerns (Python handles these); error messages are functional for load testing use cases; logging is a feature request (responses include error_message field for diagnostic info)
 - **Resource Leaks**: Analyzed and verified not issues - tcp.c properly closes sockets on ALL error paths; engine.c properly cleans up curl handles and buffers on ALL code paths; Python reference pattern (PyDict_SetItemString with inline PyLong_FromLong) is standard practice where dictionary takes ownership and frees values on garbage collection
 - **API Design Issues**: Analyzed and accepted - return value convention (0=success, -1=failure) is consistent standard C practice; timeout configuration is a feature enhancement (HTTP already supports timeout_ms parameter); protocol function signature differences are intentional separation of concerns (engine wrapper vs protocol implementation)
 - **Python/C Integration Issues**: Analyzed and accepted - GIL is intentionally released only for long-running load tests (overhead of GIL release/reacquire for single requests outweighs benefits); protocol methods are accessible via Python wrapper; async Python support is a feature enhancement (concurrency is handled by C worker threads)
-- **Protocol Implementation Weaknesses**: MQTT subscribe/unsubscribe FIXED with actual packet implementation; WebSocket and Database remain simulated as intentional design (WebSocket would require libwebsockets dependency; Database would require MySQL/PostgreSQL/MongoDB drivers - both are documented as simulated for load testing purposes)
+- **Protocol Implementation Weaknesses**: MQTT subscribe/unsubscribe implemented with actual packets; WebSocket is now real RFC 6455 via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`, simulated fallback where libcurl lacks WS); Database is real PostgreSQL via libpq (`HAVE_LIBPQ`) with MySQL/MongoDB still simulated
 
 ---
 
@@ -32,18 +32,18 @@ This document provides an extensive analysis of the LoadSpiker codebase, a high-
 
 **Status: PARTIALLY ADDRESSED**
 
-### 1.1 WebSocket Implementation is Simulated (DOCUMENTED - Intentional Design)
+### 1.1 WebSocket Implementation - REAL ✓
 
 **Location:** `src/protocols/websocket.c`
 
-**Status:** Intentionally simulated for Phase 1 load testing.
+**Status:** Real RFC 6455 frames via libcurl's WebSocket API.
 
-The WebSocket implementation uses simulated connections with timing delays to measure connection overhead without requiring the libwebsockets external dependency. This is appropriate for:
-- Load testing WebSocket server capacity
-- Measuring connection establishment times
-- Testing concurrent connection limits
-
-**For full WebSocket protocol support**, integrate libwebsockets library (future enhancement).
+When built with a libcurl that exposes the WebSocket API (`HAVE_CURL_WEBSOCKETS`),
+WebSocket connects and exchanges real frames via `curl_ws_send`/`curl_ws_recv`
+(`CONNECT_ONLY=2`); the extension releases the GIL during I/O. Where libcurl
+lacks WS support the build falls back to the previous simulated path
+(connection/timing only); the Python API is identical either way. Verified
+end-to-end against a local RFC 6455 echo server.
 
 ### 1.2 MQTT Subscribe/Unsubscribe - FIXED ✓
 
@@ -71,18 +71,20 @@ int mqtt_subscribe(...) {
 }
 ```
 
-### 1.3 Database Operations Are Simulated (DOCUMENTED - Intentional Design)
+### 1.3 Database Operations - PostgreSQL REAL ✓ / MySQL·MongoDB simulated
 
 **Location:** `src/protocols/database.c`
 
-**Status:** Intentionally simulated - adding real database drivers would require MySQL, PostgreSQL, and MongoDB client libraries as dependencies.
+**Status:** Real PostgreSQL via libpq; MySQL/MongoDB still simulated.
 
-The current implementation is appropriate for:
-- Testing database connection pool management
-- Measuring query response time simulation
-- Load testing application database interaction patterns
+When built with libpq (`HAVE_LIBPQ`), PostgreSQL connects and queries for real
+via `PQconnectdb`/`PQexec`. Connections are isolated per virtual user via
+`conn_id`. MySQL and MongoDB remain simulated (no client library linked) and are
+appropriate for connection-pool and query-timing load characterization.
 
-**For real database connectivity**, add optional compile-time flags for database drivers (future enhancement).
+**Security note:** real `PQexec` executes the query string verbatim — see the SQL
+injection note in the Executive Summary. MySQL/MongoDB connectivity would need
+their client libraries linked behind compile-time flags (future enhancement).
 
 ---
 

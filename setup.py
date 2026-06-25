@@ -143,11 +143,88 @@ check_dependencies()
 
 
 # =============================================================================
+# Optional feature detection (real WebSocket via libcurl, real PostgreSQL)
+# =============================================================================
+
+def _run(cmd):
+    """Run a command, return stripped stdout or None on failure."""
+    try:
+        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def _curl_config_bin():
+    """Prefer Homebrew's curl-config (WS-capable) over the system one."""
+    candidates = [
+        os.path.join(os.environ.get('HOMEBREW_PREFIX', '/opt/homebrew'),
+                     'opt', 'curl', 'bin', 'curl-config'),
+        'curl-config',
+    ]
+    for c in candidates:
+        if _run([c, '--version']):
+            return c
+    return None
+
+
+def get_curl_flags():
+    """Return (cflags, libs, has_websockets).
+
+    Uses curl-config (preferring Homebrew's, which ships the WebSocket API)
+    and falls back to pkg-config. has_websockets is True when libcurl >= 7.86,
+    where curl_ws_send/curl_ws_recv became available.
+    """
+    cc = _curl_config_bin()
+    if cc:
+        cflags = (_run([cc, '--cflags']) or '').split()
+        libs = (_run([cc, '--libs']) or '-lcurl').split()
+        version = _run([cc, '--version']) or ''        # e.g. "libcurl 8.20.0"
+        has_ws = False
+        try:
+            nums = version.split()[-1].split('.')
+            major, minor = int(nums[0]), int(nums[1])
+            has_ws = (major, minor) >= (7, 86)
+        except (ValueError, IndexError):
+            has_ws = False
+        if VERBOSE_MODE:
+            print(f"📦 libcurl via {cc}: {version} (websockets={has_ws})")
+        return cflags, libs, has_ws
+    # Fallback to the pkg-config path (no WS guarantee)
+    cflags, libs = get_pkg_config_flags('libcurl')
+    return cflags, libs, False
+
+
+def get_libpq_flags():
+    """Return (include_dirs, libs) for libpq, or ([], []) if not found.
+
+    Prefers Homebrew's keg-only pg_config; falls back to pg_config on PATH.
+    """
+    candidates = [
+        os.path.join(os.environ.get('HOMEBREW_PREFIX', '/opt/homebrew'),
+                     'opt', 'libpq', 'bin', 'pg_config'),
+        'pg_config',
+    ]
+    for pg in candidates:
+        incdir = _run([pg, '--includedir'])
+        libdir = _run([pg, '--libdir'])
+        if incdir and libdir and os.path.exists(os.path.join(incdir, 'libpq-fe.h')):
+            if VERBOSE_MODE:
+                print(f"📦 libpq via {pg}: include={incdir} lib={libdir}")
+            return [incdir], [f'-L{libdir}', '-lpq']
+    if VERBOSE_MODE:
+        print("ℹ️  libpq not found — PostgreSQL support will be simulated")
+    return [], []
+
+
+# =============================================================================
 # Compiler Configuration
 # =============================================================================
 
-# Get curl flags
-curl_cflags, curl_libs = get_pkg_config_flags('libcurl')
+# Get curl flags (and whether the WebSocket API is available)
+curl_cflags, curl_libs, curl_has_ws = get_curl_flags()
+
+# Get libpq flags (optional — enables real PostgreSQL when present)
+libpq_include_dirs, libpq_libs = get_libpq_flags()
 
 # Warning flags - catch common bugs at compile time
 WARNING_FLAGS = [
@@ -180,7 +257,14 @@ extra_compile_args = (
 )
 
 # Combine all link arguments
-extra_link_args = curl_libs + LINK_FLAGS + ['-pthread']
+extra_link_args = curl_libs + libpq_libs + LINK_FLAGS + ['-pthread']
+
+# Feature macros consumed by the C sources via #ifdef
+feature_macros = [('_GNU_SOURCE', None)]
+if curl_has_ws:
+    feature_macros.append(('HAVE_CURL_WEBSOCKETS', '1'))
+if libpq_libs:
+    feature_macros.append(('HAVE_LIBPQ', '1'))
 
 if VERBOSE_MODE:
     print(f"🔧 Compile flags: {' '.join(extra_compile_args)}")
@@ -202,15 +286,16 @@ loadspiker_c_extension = Extension(
         'src/protocols/database.c',
         'src/protocols/websocket.c'
     ],
-    include_dirs=['src', 'src/protocols'],
+    include_dirs=['src', 'src/protocols'] + libpq_include_dirs,
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,
-    define_macros=[('_GNU_SOURCE', None)]
+    define_macros=feature_macros
 )
 
 setup(
     name='loadspiker',
     version='1.0.0',
+    license='MIT',
     description='High-performance load testing tool with C engine and Python scripting',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
@@ -231,7 +316,6 @@ setup(
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',

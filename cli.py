@@ -146,18 +146,22 @@ def load_scenario_from_file(scenario_file: str) -> Scenario:
 def create_scenario_from_config(config: Dict[str, Any]) -> Scenario:
     """Create scenario from configuration dictionary"""
     scenario_type = config.get('type', 'basic')
-    
+
     if scenario_type == 'rest_api':
-        base_url = config['base_url']
-        scenario = RESTAPIScenario(base_url, config.get('name', 'REST API Test'))
+        if 'base_url' not in config:
+            raise ValueError("Config for type 'rest_api' requires a 'base_url' key")
+        scenario = RESTAPIScenario(config['base_url'], config.get('name', 'REST API Test'))
     elif scenario_type == 'website':
-        base_url = config['base_url']
-        scenario = WebsiteScenario(base_url, config.get('name', 'Website Test'))
+        if 'base_url' not in config:
+            raise ValueError("Config for type 'website' requires a 'base_url' key")
+        scenario = WebsiteScenario(config['base_url'], config.get('name', 'Website Test'))
     else:
         scenario = Scenario(config.get('name', 'Load Test'))
-    
+
     # Add requests from config
-    for req_config in config.get('requests', []):
+    for i, req_config in enumerate(config.get('requests', [])):
+        if 'url' not in req_config:
+            raise ValueError(f"Request #{i + 1} in config is missing required 'url' key")
         url = req_config['url']
         method = req_config.get('method', 'GET')
         headers = req_config.get('headers', {})

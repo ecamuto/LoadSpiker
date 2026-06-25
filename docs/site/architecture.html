@@ -195,32 +195,32 @@ else:
           <tr>
             <td><code>websocket.c</code></td>
             <td>WebSocket</td>
-            <td><span class="badge badge-yellow">Simulated</span></td>
-            <td>Phase 1 timing simulation. No libwebsockets dependency required.</td>
+            <td><span class="badge badge-green">Real</span> / <span class="badge badge-yellow">sim fallback</span></td>
+            <td>Real RFC 6455 frames via libcurl's WebSocket API (<code>HAVE_CURL_WEBSOCKETS</code>); simulated where libcurl lacks WS support.</td>
           </tr>
           <tr>
             <td><code>tcp.c</code></td>
             <td>TCP</td>
             <td><span class="badge badge-green">Real</span></td>
-            <td>POSIX socket-based implementation. Python bindings pending.</td>
+            <td>POSIX socket-based implementation, bound through the Python extension. Per-user connection isolation.</td>
           </tr>
           <tr>
             <td><code>udp.c</code></td>
             <td>UDP</td>
             <td><span class="badge badge-green">Real</span></td>
-            <td>POSIX socket-based implementation. Python bindings pending.</td>
+            <td>POSIX socket-based implementation, bound through the Python extension. Per-user endpoint isolation.</td>
           </tr>
           <tr>
             <td><code>mqtt.c</code></td>
             <td>MQTT</td>
             <td><span class="badge badge-green">Real</span></td>
-            <td>Implements CONNECT, PUBLISH, SUBSCRIBE, UNSUBACK packets. Python bindings pending.</td>
+            <td>Implements CONNECT, PUBLISH, SUBSCRIBE, UNSUBSCRIBE packets, bound through the Python extension.</td>
           </tr>
           <tr>
             <td><code>database.c</code></td>
             <td>Database</td>
-            <td><span class="badge badge-yellow">Simulated</span></td>
-            <td>Simulates connection pool overhead. No real DB drivers. Python bindings pending.</td>
+            <td><span class="badge badge-green">PostgreSQL real</span> / <span class="badge badge-yellow">MySQL·Mongo sim</span></td>
+            <td>Real PostgreSQL via libpq (<code>HAVE_LIBPQ</code>); MySQL/MongoDB simulate pool overhead. Bound through the Python extension, isolated per user via <code>conn_id</code>.</td>
           </tr>
         </tbody>
       </table>
@@ -257,7 +257,7 @@ else:
         <li><code>udp_cleanup_all(engine)</code> — Closes all UDP endpoints</li>
         <li><code>mqtt_cleanup_all(engine)</code> — Sends MQTT DISCONNECT and closes all broker sockets</li>
         <li><code>websocket_cleanup_all(engine)</code> — Clears all WebSocket connection state</li>
-        <li><code>database_cleanup_all(engine)</code> — Releases all simulated connection pool entries</li>
+        <li><code>database_cleanup_all(engine)</code> — Releases all connection pool entries (real libpq handles and simulated)</li>
       </ul>
 
       <h3>Buffer Safety</h3>

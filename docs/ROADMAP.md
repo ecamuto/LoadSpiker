@@ -28,7 +28,7 @@ This document outlines the features and improvements needed to bring LoadSpiker 
 - ✅ Performance assertion system for aggregate metrics validation
 
 ### Demo & Examples
-- ✅ Protocol-specific test suites (`test_websocket.py`, `test_tcp.py`, `test_udp.py`, `test_mqtt.py`, `test_database.py`)
+- ✅ Protocol-specific test suites under `tests/` (`test_tcp.py`, `test_udp.py`, `test_mqtt.py`, `test_database.py`, `test_protocol_load.py`, `test_security_regressions.py`)
 - ✅ Comprehensive examples: `multi_protocol_demo.py`, `tcp_demo.py`, `udp_demo.py`, `mqtt_demo.py`, `database_demo.py`
 - ✅ Mixed protocol load testing capabilities
 - ✅ Performance assertion demonstrations
@@ -60,11 +60,11 @@ This document outlines the features and improvements needed to bring LoadSpiker 
 **Priority: High** ✅ **MOSTLY COMPLETED**
 
 **✅ Implemented Protocols:**
-- **WebSocket Testing**: ✅ Real-time bidirectional communication testing
+- **WebSocket Testing**: ✅ Real RFC 6455 via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`); simulated fallback where libcurl lacks WS
 - **TCP Socket Testing**: ✅ Low-level TCP network protocol testing  
 - **UDP Socket Testing**: ✅ Low-level UDP network protocol testing
-- **Database Testing**: ✅ Direct database connection testing (MySQL, PostgreSQL, MongoDB)
-- **MQTT Testing**: ✅ Message queue protocol testing
+- **Database Testing**: ✅ Real PostgreSQL via libpq (`HAVE_LIBPQ`); MySQL/MongoDB simulated (connection-pool & query-timing)
+- **MQTT Testing**: ✅ Real MQTT 3.1.1 CONNECT/PUBLISH/SUBSCRIBE/UNSUBSCRIBE over TCP
 
 **🔄 Remaining Protocols:**
 - **gRPC/Protocol Buffers**: Modern microservice communication

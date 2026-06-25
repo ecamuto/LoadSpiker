@@ -4,68 +4,87 @@
 
 # LoadSpiker
 
-A high-performance load testing tool with a C engine and Python scripting interface, designed to compete with tools like Gatling and JMeter.
+A high-performance load-testing tool with a **C engine** and a **Python
+scripting interface**, designed in the spirit of Gatling and JMeter but driven
+by plain Python.
+
+> **This README is the primary documentation.** For internals and contribution
+> workflow see the **[Contributor Guide](docs/CONTRIBUTOR_GUIDE.md)**; for known
+> issues and their fixes see the **[Security & Correctness Audit](docs/SECURITY_AUDIT.md)**;
+> for the full user API see **[docs/API.md](docs/API.md)**.
 
 ## Features
 
-- **High Performance**: C-based multi-protocol engine with async I/O and connection pooling
-- **Python Scripting**: Easy-to-use Python API for creating test scenarios
-- **Multi-Protocol Support**: HTTP/HTTPS, WebSocket, TCP, UDP, Database, and MQTT protocols
-- **Session Management**: Thread-safe session storage with automatic cookie handling and request correlation
-- **Authentication Flows**: Complete authentication system supporting Basic Auth, Bearer Token, API Key, Form-based, OAuth 2.0, and Custom authentication
-- **Message Queue Testing**: Built-in MQTT support for IoT and pub-sub architecture testing
-- **Real-time Metrics**: Live performance monitoring and reporting
-- **Multiple Report Formats**: Console, JSON, and HTML reports with charts
-- **Flexible Load Patterns**: Constant load, ramp-up, spike testing, and custom patterns
-- **REST API Testing**: Built-in support for REST API testing scenarios
-- **Website Testing**: Realistic user behavior simulation for web applications
-- **Advanced Assertions**: Comprehensive assertion system for response validation
-- **Data-Driven Testing**: CSV file support for parameterized load testing with multiple distribution strategies
-- **Multi-User Session Isolation**: Complete separation of session data between virtual users
+- **C engine on the hot path** — worker-thread pool, libcurl HTTP, connection
+  pooling, and a microsecond-resolution latency histogram (p95/p99).
+- **Python scripting** — author scenarios, assertions, and reporting in Python.
+- **Multi-protocol** — HTTP/HTTPS, TCP, UDP, MQTT (real); real RFC 6455
+  WebSocket and real PostgreSQL where the build finds libcurl's WebSocket API
+  and libpq (MySQL/MongoDB still simulated — see the capability matrix below).
+- **Session management** — thread-safe per-user session storage, cookie
+  handling, and response→variable correlation.
+- **Authentication flows** — Basic, Bearer, API Key, Form, OAuth 2.0, Custom.
+- **Assertions** — response assertions (status, body, JSON path, headers,
+  timing) and aggregate performance assertions (throughput, error rate, …).
+- **Reporting** — Console, JSON, and HTML reporters, composable via `MultiReporter`.
+- **Load patterns** — constant, ramp-up, spike, and stress helpers.
+- **Data-driven testing** — CSV sources with sequential/random/circular/unique
+  distribution and `${var}` substitution.
 
-## Documentation
+### Protocol capability matrix
 
-Full documentation is available as a static HTML site:
+LoadSpiker runs either the **C engine** (when the compiled extension is present)
+or a **pure-Python fallback**. What each protocol actually does today:
 
-```text
-docs/site/index.html
-```
+| Protocol | C engine | Python fallback | Notes |
+| -------- | -------- | --------------- | ----- |
+| HTTP/HTTPS | ✅ real (libcurl) | ✅ real (`requests`) | Full request queue + worker pool in C. |
+| TCP | ✅ real sockets | ✅ real sockets | Connection pool; binary payloads with embedded NULs send in full. |
+| UDP | ✅ real sockets | ✅ real sockets | Endpoint pool. |
+| MQTT | ✅ real MQTT 3.1.1 over TCP | ⚠️ simulated | Hand-rolled CONNECT/PUBLISH/SUBSCRIBE packets. |
+| WebSocket | ✅ real RFC 6455 (libcurl WS) / ⚠️ simulated fallback | ⚠️ not implemented | Real frames via libcurl's WebSocket API when built with `HAVE_CURL_WEBSOCKETS`; simulated where libcurl lacks WS support. |
+| Database | ✅ real PostgreSQL (libpq) / ⚠️ simulated | ⚠️ not implemented | Real connect/query via libpq when built with `HAVE_LIBPQ`. MySQL/MongoDB still simulated (no client linked). |
 
-| Page | Description |
-| ---- | ----------- |
-| [Home](docs/site/index.html) | Overview, features, quick-start |
-| [Getting Started](docs/site/getting-started.html) | Installation, requirements, first test |
-| [API Reference](docs/site/api-reference.html) | Engine, Scenario, Reporters, Utilities |
-| [CLI Reference](docs/site/cli.html) | All CLI flags and load-pattern syntax |
-| [Protocols](docs/site/protocols.html) | HTTP, WebSocket, TCP, UDP, MQTT, Database |
-| [Assertions](docs/site/assertions.html) | Response and performance assertions |
-| [Sessions & Auth](docs/site/sessions-auth.html) | Session management and authentication flows |
-| [Architecture](docs/site/architecture.html) | C engine internals, threading, memory model |
-| [Troubleshooting](docs/site/troubleshooting.html) | Common errors and debug techniques |
-| [Roadmap](docs/site/roadmap.html) | Planned phases and changelog |
-| [Contributing](docs/site/contributing.html) | Dev setup, code style, PR checklist |
+> Where a protocol falls back to simulation it returns realistic-looking
+> responses and timings so you can build and validate scenarios, but it does not
+> talk to a real server. The build degrades gracefully: `setup.py` probes
+> `curl-config`/`pg_config` and defines `HAVE_CURL_WEBSOCKETS` / `HAVE_LIBPQ`
+> only when those are present.
+> Tracked in the [Contributor Guide](docs/CONTRIBUTOR_GUIDE.md#8-known-gaps--refactor-todo).
 
-Open locally:
+## Additional documentation
 
-```bash
-open docs/site/index.html        # macOS
-xdg-open docs/site/index.html    # Linux
-```
+A static HTML site also ships in `docs/site/` (`open docs/site/index.html`); its
+protocol/architecture/API pages are reconciled with the capability matrix above.
+When in doubt, this README and the Contributor Guide are authoritative.
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Install system dependencies (Ubuntu/Debian)
-sudo apt-get install libcurl4-openssl-dev python3-dev pkg-config
+# 1. System dependencies
+sudo apt-get install build-essential libcurl4-openssl-dev python3-dev pkg-config  # Debian/Ubuntu
+# brew install curl pkg-config                                                    # macOS
 
-# Install LoadSpiker
+# 2. Get the source
 git clone <repository-url>
 cd LoadSpiker
+
+# 3a. Build the C extension for the interpreter that will run your tests
+python3 setup.py build_ext --inplace          # produces loadspiker/loadspiker_c.<abi>.so
+# 3b. (or) use the Makefile helpers
 make install-deps
 make install
 ```
+
+> **Which build command?** `python3 setup.py build_ext --inplace` compiles the
+> extension for *your* Python interpreter and places it where `import loadspiker`
+> finds it. `make build` produces `obj/loadspiker.so` against whatever
+> `python3-config` resolves to — handy for a compile check, but the in-place
+> build is what Python imports. After editing a C **header**, re-run with
+> `--force` (setuptools doesn't track header dependencies). If imports look
+> stale, delete leftover `*.so` files in the repo root / `loadspiker/`.
 
 ### Simple Usage
 
@@ -130,29 +149,53 @@ if not success:
 
 ## Architecture
 
+LoadSpiker is three layers; the hot path lives in C while authoring stays in
+Python.
+
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Python API    │    │  Python Scripts  │    │   CLI Interface │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-         ┌───────────────────────────────────────────────┐
-         │           Python C Extension                  │
-         └───────────────────────────────────────────────┘
-                                 │
-         ┌───────────────────────────────────────────────┐
-         │              C Engine Core                    │
-         │  • Multi-Protocol Router                      │
-         │  • HTTP Client (libcurl)                      │
-         │  • MQTT Protocol Support                      │
-         │  • WebSocket, TCP, UDP                        │
-         │  • Database Connectors                        │
-         │  • Connection Pooling                         │
-         │  • Worker Threads                             │
-         │  • Metrics Collection                         │
-         └───────────────────────────────────────────────┘
+Layer 3  Python authoring        loadspiker/*.py, cli.py
+         (Engine wrapper, Scenario builders, assertions,
+          reporters, sessions/auth, CSV data sources)
+                    │  keyword-argument method calls
+Layer 2  CPython C extension     src/python_extension.c
+         (loadspiker.Engine type: marshal args → C structs,
+          release the GIL around I/O, build result dicts)
+                    │  engine_* / protocol_* C calls
+Layer 1  C engine core           src/engine.c + src/protocols/*.c
+         (worker-thread pool, request queue, libcurl HTTP,
+          metrics histogram, per-protocol modules)
 ```
+
+**Threading.** `engine_create` starts a pool of worker threads. A load test
+(`start_load_test`) additionally spawns up to `min(users, num_requests)`
+per-test workers that drain a shared request ring buffer and exit when it is
+empty or a hard timeout (`duration + 5s`) elapses. Metrics are updated under a
+dedicated `metrics_mutex`; the queue is guarded by `queue_mutex` + a condition
+variable; shutdown/cancel flags are atomic. The build is verified race-free with
+ThreadSanitizer (`make tsan`).
+
+**Metrics.** Each request is recorded into a 1 ms-bucket latency histogram
+(0–10 s + overflow). `get_metrics()` derives p95/p99 from the histogram and RPS
+from wall-clock elapsed time.
+
+For a full internals tour (data structures, lock ordering, the C↔Python
+boundary rules, and how to add a protocol) read the
+**[Contributor Guide](docs/CONTRIBUTOR_GUIDE.md)**.
+
+## Security & trust boundaries
+
+- **Scenario and config files execute arbitrary code.** `python3 cli.py -s
+  scenario.py` imports and runs a Python file; a JSON config drives requests.
+  Treat scenario/config files like executables — only run ones you authored or
+  trust.
+- **Point load tests only at systems you are authorized to test.** A load tool
+  is, by definition, a traffic generator.
+- **Credentials** passed to MQTT/HTTP auth are used to build requests and are
+  not persisted by the engine (the MQTT module explicitly wipes the password
+  after the CONNECT packet is sent).
+
+See the **[Security & Correctness Audit](docs/SECURITY_AUDIT.md)** for the full
+findings list and verification steps.
 
 ## Examples
 
@@ -464,14 +507,17 @@ scenario.add_request(HTTPRequest("https://api.example.com/endpoint2", "POST", bo
 python3 cli.py -s scenario.py -u 30 -d 90
 ```
 
-## Performance Benchmarks
+## Performance
 
-LoadSpiker is designed for high performance:
+LoadSpiker keeps the request/metrics path in C with fixed-size buffers (no
+per-request allocation) and a lock-light worker pool. Actual throughput depends
+heavily on the target, the network, and your `max_connections`/`worker_threads`
+settings, so **benchmark against your own workload** rather than relying on a
+headline number. Measure with:
 
-- **Throughput**: 10,000+ requests/second on modern hardware
-- **Memory Usage**: Low memory footprint with efficient connection pooling
-- **Latency**: Minimal overhead compared to pure HTTP clients
-- **Scalability**: Handles thousands of concurrent connections
+```bash
+make benchmark   # runs benchmarks/benchmark_engine.py
+```
 
 ## CLI Reference
 
@@ -553,20 +599,17 @@ make package
 
 **Solutions**:
 ```bash
-# 1. Build debug version for detailed error information
+# 1. Build the AddressSanitizer debug version
 make clean
-make debug
+make debug          # produces obj/loadspiker_debug.so
 
-# 2. Copy debug build to package
-cp obj/loadtest_debug.so loadspiker/loadtest.so
+# 2. Run the suite under ASan (rebuilds + runs pytest)
+make test-asan
 
-# 3. Run with memory debugging (Linux)
-ASAN_OPTIONS=abort_on_error=1:halt_on_error=1 python3 your_test.py
+# 3. Or run your own script with leak detection (Linux)
+ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 python3 your_test.py
 
-# 4. Run with memory debugging (macOS)
-DYLD_INSERT_LIBRARIES=/Library/Developer/CommandLineTools/usr/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib python3 your_test.py
-
-# 5. If AddressSanitizer doesn't work, try Valgrind (Linux)
+# 4. If AddressSanitizer is unavailable, try Valgrind (Linux)
 valgrind --tool=memcheck --leak-check=full python3 your_test.py
 ```
 
@@ -582,8 +625,9 @@ export PYTHONPATH=/path/to/LoadSpiker:$PYTHONPATH
 # 2. Use the activation script
 source activate_env.sh
 
-# 3. Verify the shared library exists
-ls -la loadspiker/_c_ext/loadspiker_c.so
+# 3. Verify the compiled extension exists for your interpreter
+ls -la loadspiker/loadspiker_c*.so
+#    If missing, build it:  python3 setup.py build_ext --inplace --force
 
 # 4. Install in development mode (requires virtual environment)
 python3 -m pip install -e .
@@ -709,12 +753,19 @@ brew install curl pkg-config
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on:
+We welcome contributions! Start with the
+**[Contributor Guide](docs/CONTRIBUTOR_GUIDE.md)** — a deep tour of the codebase
+covering architecture, the threading model, the C↔Python boundary, build/debug
+workflow, and a PR checklist. The short [CONTRIBUTING.md](CONTRIBUTING.md) is a
+quickstart. Before changing the C engine, also skim the
+[Security & Correctness Audit](docs/SECURITY_AUDIT.md).
 
-- Setting up the development environment
-- Code style guidelines
-- Testing procedures
-- Debugging techniques
+Key topics:
+
+- Setting up the development environment (and the two build paths)
+- The three-layer architecture and threading model
+- Reference-counting / GIL rules at the C↔Python boundary
+- Testing (`make test`), ASan (`make test-asan`), and TSan (`make tsan`)
 - Submitting pull requests
 
 Quick start:

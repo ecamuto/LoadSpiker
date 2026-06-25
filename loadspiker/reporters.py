@@ -170,7 +170,11 @@ class HTMLReporter(BaseReporter):
     def report_metrics(self, metrics: Dict[str, Any]):
         """Generate HTML report"""
         duration = self.end_time - self.start_time if self.start_time else 0
-        
+
+        # Escape "</" so no string field (URL/error/body, if ever added to
+        # progress_data) can break out of the <script> block. Defense-in-depth.
+        progress_json = json.dumps(self.progress_data).replace("</", "<\\/")
+
         html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -230,7 +234,7 @@ class HTMLReporter(BaseReporter):
     </div>
     
     <script>
-        const progressData = {json.dumps(self.progress_data)};
+        const progressData = {progress_json};
         
         // RPS Chart
         const rpsCtx = document.getElementById('rpsChart').getContext('2d');

@@ -33,16 +33,17 @@ typedef struct {
 static void *tcp_thread_func(void *arg)
 {
     thread_arg_t *targ = (thread_arg_t *)arg;
-    (void)targ;
+    char conn_id[64];
+    snprintf(conn_id, sizeof(conn_id), "tsan_tcp_%d", targ->idx);
 
     for (int i = 0; i < ITERATIONS; i++) {
         response_t resp;
         memset(&resp, 0, sizeof(resp));
         /* Failure return values are expected — no server is listening. */
-        tcp_connect("127.0.0.1", 9999, &resp);
+        tcp_connect("127.0.0.1", 9999, conn_id, &resp);
 
         memset(&resp, 0, sizeof(resp));
-        tcp_disconnect("127.0.0.1", 9999, &resp);
+        tcp_disconnect("127.0.0.1", 9999, conn_id, &resp);
     }
     return NULL;
 }
@@ -52,15 +53,16 @@ static void *tcp_thread_func(void *arg)
 static void *udp_thread_func(void *arg)
 {
     thread_arg_t *targ = (thread_arg_t *)arg;
-    (void)targ;
+    char conn_id[64];
+    snprintf(conn_id, sizeof(conn_id), "tsan_udp_%d", targ->idx);
 
     for (int i = 0; i < ITERATIONS; i++) {
         response_t resp;
         memset(&resp, 0, sizeof(resp));
-        udp_create_endpoint("127.0.0.1", 9998, &resp);
+        udp_create_endpoint("127.0.0.1", 9998, conn_id, &resp);
 
         memset(&resp, 0, sizeof(resp));
-        udp_close_endpoint("127.0.0.1", 9998, &resp);
+        udp_close_endpoint("127.0.0.1", 9998, conn_id, &resp);
     }
     return NULL;
 }
@@ -90,15 +92,16 @@ static void *mqtt_thread_func(void *arg)
 static void *db_thread_func(void *arg)
 {
     thread_arg_t *targ = (thread_arg_t *)arg;
-    (void)targ;
+    char conn_id[64];
+    snprintf(conn_id, sizeof(conn_id), "tsan_db_%d", targ->idx);
 
     for (int i = 0; i < ITERATIONS; i++) {
         response_t resp;
         memset(&resp, 0, sizeof(resp));
-        database_connect("mysql://127.0.0.1:3306/test", "mysql", &resp);
+        database_connect("mysql://127.0.0.1:3306/test", conn_id, "mysql", &resp);
 
         memset(&resp, 0, sizeof(resp));
-        database_disconnect("mysql://127.0.0.1:3306/test", &resp);
+        database_disconnect("mysql://127.0.0.1:3306/test", conn_id, &resp);
     }
     return NULL;
 }

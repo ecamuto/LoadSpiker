@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed troubleshooting documentation
 - Enhanced memory safety in C engine core
 - **Real RFC 6455 WebSocket** via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`), GIL released during I/O; simulated fallback where libcurl lacks WS
-- **Real PostgreSQL** via libpq (`HAVE_LIBPQ`); per-user DB isolation via `conn_id`; MySQL/MongoDB still simulated
+- **Real PostgreSQL** via libpq (`HAVE_LIBPQ`), **real MySQL/MariaDB** via libmysqlclient (`HAVE_MYSQL`), and **real MongoDB** via libmongoc (`HAVE_MONGOC`, query string is a JSON command document); per-user DB isolation via `conn_id`; each backend degrades to a simulated path when its client lib is absent
 - C-core ramp-up (`ramp_up_seconds`) with a duration-sustained load model (replaces the Python burst loop)
 - AddressSanitizer harness for the MQTT encoders (`make test-asan`, `tests/asan_check.c`)
 - Security regression tests (`tests/test_security_regressions.py`) and a GitHub Actions CI workflow

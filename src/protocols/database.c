@@ -11,6 +11,17 @@
 #include <libpq-fe.h>
 #endif
 
+#ifdef HAVE_MYSQL
+#include <mysql.h>
+#endif
+
+#ifdef HAVE_MONGOC
+#include <mongoc/mongoc.h>
+/* mongoc requires a one-time process-wide init before any client is created. */
+static pthread_once_t mongoc_init_once = PTHREAD_ONCE_INIT;
+static void mongoc_init_once_fn(void) { mongoc_init(); }
+#endif
+
 /* Per-thread RNG seed — initialized lazily on first use */
 static __thread unsigned int thread_rng_seed = 0;
 
@@ -232,6 +243,140 @@ static int database_pg_query(PGconn* pg, const char* query, response_t* response
 }
 #endif
 
+#ifdef HAVE_MYSQL
+/* Execute a query against a live MySQL/MariaDB connection. Mirrors the
+   PostgreSQL helper: SELECT-style statements build a CSV result_set, other
+   statements report affected rows. start_time is the caller's timestamp. */
+static int database_mysql_query(MYSQL* my, const char* query, response_t* response, uint64_t start_time) {
+    database_response_data_t* db_data = &response->protocol_data.database;
+    const size_t cap = sizeof(db_data->result_set);
+
+    if (mysql_query(my, query) != 0) {
+        response->success = false;
+        response->status_code = 500;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "MySQL query failed: %s", mysql_error(my));
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+
+    MYSQL_RES* res = mysql_store_result(my);
+    if (res) {
+        unsigned int ncols = mysql_num_fields(res);
+        MYSQL_FIELD* fields = mysql_fetch_fields(res);
+        size_t pos = 0;
+        db_data->result_set[0] = '\0';
+
+        for (unsigned int c = 0; c < ncols && pos < cap - 1; c++) {
+            int n = snprintf(db_data->result_set + pos, cap - pos,
+                             "%s%s", c ? "," : "", fields[c].name);
+            if (n < 0) break;
+            pos += (size_t)n;
+            if (pos >= cap) { pos = cap - 1; break; }
+        }
+        MYSQL_ROW row;
+        while ((row = mysql_fetch_row(res)) != NULL && pos < cap - 1) {
+            int n = snprintf(db_data->result_set + pos, cap - pos, "\n");
+            if (n < 0) break;
+            pos += (size_t)n;
+            for (unsigned int c = 0; c < ncols && pos < cap - 1; c++) {
+                const char* val = row[c] ? row[c] : "";
+                n = snprintf(db_data->result_set + pos, cap - pos,
+                             "%s%s", c ? "," : "", val);
+                if (n < 0) break;
+                pos += (size_t)n;
+                if (pos >= cap) { pos = cap - 1; break; }
+            }
+        }
+
+        db_data->rows_returned = (int)mysql_num_rows(res);
+        db_data->rows_affected = 0;
+        mysql_free_result(res);
+        response->success = true;
+        response->status_code = 200;
+        snprintf(response->body, sizeof(response->body),
+                "Query executed successfully. %d rows returned.", db_data->rows_returned);
+    } else if (mysql_field_count(my) != 0) {
+        /* Columns were expected but the result couldn't be read — a real error. */
+        response->success = false;
+        response->status_code = 500;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "MySQL result fetch failed: %s", mysql_error(my));
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    } else {
+        /* Non-SELECT statement (INSERT/UPDATE/DELETE/DDL). */
+        db_data->rows_affected = (int)mysql_affected_rows(my);
+        db_data->rows_returned = 0;
+        db_data->result_set[0] = '\0';
+        response->success = true;
+        response->status_code = 200;
+        snprintf(response->body, sizeof(response->body),
+                "Query executed successfully. %d row(s) affected.", db_data->rows_affected);
+    }
+
+    response->response_time_us = get_time_us() - start_time;
+    return 0;
+}
+#endif
+
+#ifdef HAVE_MONGOC
+/* Run a command against a live MongoDB connection. MongoDB has no SQL, so the
+   query string is interpreted as a JSON command document (e.g.
+   '{"find": "users", "filter": {}}') executed via the C driver's command API;
+   the reply BSON is serialized back into result_set as relaxed extended JSON. */
+static int database_mongo_query(mongoc_client_t* client, const char* dbname,
+                                const char* query, response_t* response, uint64_t start_time) {
+    database_response_data_t* db_data = &response->protocol_data.database;
+    bson_error_t error;
+    bson_t cmd;
+
+    if (!bson_init_from_json(&cmd, query, -1, &error)) {
+        response->success = false;
+        response->status_code = 400;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "Invalid MongoDB command JSON: %s", error.message);
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+
+    bson_t reply;
+    bool ok = mongoc_client_command_simple(client,
+                                           (dbname && dbname[0]) ? dbname : "admin",
+                                           &cmd, NULL, &reply, &error);
+    bson_destroy(&cmd);
+
+    if (!ok) {
+        bson_destroy(&reply);
+        response->success = false;
+        response->status_code = 500;
+        snprintf(response->error_message, sizeof(response->error_message),
+                "MongoDB command failed: %s", error.message);
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
+
+    size_t json_len = 0;
+    char* json = bson_as_relaxed_extended_json(&reply, &json_len);
+    if (json) {
+        strncpy(db_data->result_set, json, sizeof(db_data->result_set) - 1);
+        db_data->result_set[sizeof(db_data->result_set) - 1] = '\0';
+        bson_free(json);
+    } else {
+        db_data->result_set[0] = '\0';
+    }
+    db_data->rows_returned = 0;
+    db_data->rows_affected = 0;
+    bson_destroy(&reply);
+
+    response->success = true;
+    response->status_code = 200;
+    snprintf(response->body, sizeof(response->body), "MongoDB command executed successfully.");
+    response->response_time_us = get_time_us() - start_time;
+    return 0;
+}
+#endif
+
 int database_connect(const char* connection_string, const char* conn_id, const char* db_type_str, response_t* response) {
     if (!connection_string || !db_type_str || !response) {
         return -1;
@@ -314,6 +459,70 @@ int database_connect(const char* connection_string, const char* conn_id, const c
     }
 #endif
 
+#ifdef HAVE_MYSQL
+    if (db_type == DB_TYPE_MYSQL) {
+        /* Real MySQL/MariaDB connection via libmysqlclient. Done WITHOUT the
+           pool mutex so a blocking connect can't serialize DB ops. */
+        MYSQL* my = mysql_init(NULL);
+        if (!my) {
+            strcpy(response->error_message, "MySQL init failed: out of memory");
+            response->success = false;
+            response->status_code = 500;
+            response->response_time_us = get_time_us() - start_time;
+            return -1;
+        }
+        /* Force TCP: with host "localhost" libmysqlclient otherwise ignores the
+           port and dials a local unix socket. We always have a host:port from
+           the connection string, matching the PostgreSQL/MongoDB behaviour. */
+        unsigned int proto = MYSQL_PROTOCOL_TCP;
+        mysql_options(my, MYSQL_OPT_PROTOCOL, &proto);
+        if (!mysql_real_connect(my, host,
+                                username[0] ? username : NULL,
+                                password[0] ? password : NULL,
+                                database[0] ? database : NULL,
+                                port, NULL, 0)) {
+            snprintf(response->error_message, sizeof(response->error_message),
+                    "MySQL connection failed: %s", mysql_error(my));
+            mysql_close(my);
+            response->success = false;
+            response->status_code = 500;
+            response->response_time_us = get_time_us() - start_time;
+            return -1;
+        }
+        handle = my;
+    }
+#endif
+
+#ifdef HAVE_MONGOC
+    if (db_type == DB_TYPE_MONGODB) {
+        pthread_once(&mongoc_init_once, mongoc_init_once_fn);
+        mongoc_client_t* client = mongoc_client_new(connection_string);
+        if (!client) {
+            strcpy(response->error_message, "MongoDB connection failed: invalid URI");
+            response->success = false;
+            response->status_code = 500;
+            response->response_time_us = get_time_us() - start_time;
+            return -1;
+        }
+        /* mongoc_client_new is lazy — ping the server to fail fast on connect. */
+        bson_t ping = BSON_INITIALIZER;
+        bson_append_int32(&ping, "ping", 4, 1);
+        bson_error_t error;
+        bool ok = mongoc_client_command_simple(client, "admin", &ping, NULL, NULL, &error);
+        bson_destroy(&ping);
+        if (!ok) {
+            snprintf(response->error_message, sizeof(response->error_message),
+                    "MongoDB connection failed: %s", error.message);
+            mongoc_client_destroy(client);
+            response->success = false;
+            response->status_code = 500;
+            response->response_time_us = get_time_us() - start_time;
+            return -1;
+        }
+        handle = client;
+    }
+#endif
+
     /* --- Critical section 2: publish the live handle --- */
     pthread_mutex_lock(&db_pool_mutex);
     conn->is_connected = true;
@@ -371,6 +580,23 @@ int database_execute_query(const char* connection_string, const char* conn_id, c
 #ifdef HAVE_LIBPQ
     if (conn_type == DB_TYPE_POSTGRESQL && handle) {
         return database_pg_query((PGconn*)handle, query, response, start_time);
+    }
+#endif
+
+#ifdef HAVE_MYSQL
+    if (conn_type == DB_TYPE_MYSQL && handle && handle != (void*)1) {
+        return database_mysql_query((MYSQL*)handle, query, response, start_time);
+    }
+#endif
+
+#ifdef HAVE_MONGOC
+    if (conn_type == DB_TYPE_MONGODB && handle && handle != (void*)1) {
+        /* MongoDB commands run against a database; recover its name from the
+           connection string (parsing touches only local buffers). */
+        char h[256], db[256], u[256], p[256];
+        int pt;
+        database_parse_connection_string(connection_string, h, &pt, db, u, p);
+        return database_mongo_query((mongoc_client_t*)handle, db, query, response, start_time);
     }
 #endif
 
@@ -465,7 +691,18 @@ int database_disconnect(const char* connection_string, const char* conn_id, resp
     if (type == DB_TYPE_POSTGRESQL && handle && handle != (void*)1) {
         PQfinish((PGconn*)handle);
     }
-#else
+#endif
+#ifdef HAVE_MYSQL
+    if (type == DB_TYPE_MYSQL && handle && handle != (void*)1) {
+        mysql_close((MYSQL*)handle);
+    }
+#endif
+#ifdef HAVE_MONGOC
+    if (type == DB_TYPE_MONGODB && handle && handle != (void*)1) {
+        mongoc_client_destroy((mongoc_client_t*)handle);
+    }
+#endif
+#if !defined(HAVE_LIBPQ) && !defined(HAVE_MYSQL) && !defined(HAVE_MONGOC)
     (void)handle; (void)type;
 #endif
 
@@ -479,11 +716,22 @@ int database_disconnect(const char* connection_string, const char* conn_id, resp
 void database_cleanup_all(void) {
     pthread_mutex_lock(&db_pool_mutex);
     for (int i = 0; i < db_connection_count; i++) {
+        void* h = db_connections[i].connection_handle;
+        bool real = (h && h != (void*)1);
+        (void)real; (void)h;
 #ifdef HAVE_LIBPQ
-        if (db_connections[i].type == DB_TYPE_POSTGRESQL &&
-            db_connections[i].connection_handle &&
-            db_connections[i].connection_handle != (void*)1) {
-            PQfinish((PGconn*)db_connections[i].connection_handle);
+        if (real && db_connections[i].type == DB_TYPE_POSTGRESQL) {
+            PQfinish((PGconn*)h);
+        }
+#endif
+#ifdef HAVE_MYSQL
+        if (real && db_connections[i].type == DB_TYPE_MYSQL) {
+            mysql_close((MYSQL*)h);
+        }
+#endif
+#ifdef HAVE_MONGOC
+        if (real && db_connections[i].type == DB_TYPE_MONGODB) {
+            mongoc_client_destroy((mongoc_client_t*)h);
         }
 #endif
         db_connections[i].is_connected = false;

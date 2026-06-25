@@ -19,8 +19,9 @@ by plain Python.
   pooling, and a microsecond-resolution latency histogram (p95/p99).
 - **Python scripting** — author scenarios, assertions, and reporting in Python.
 - **Multi-protocol** — HTTP/HTTPS, TCP, UDP, MQTT (real); real RFC 6455
-  WebSocket and real PostgreSQL where the build finds libcurl's WebSocket API
-  and libpq (MySQL/MongoDB still simulated — see the capability matrix below).
+  WebSocket and real databases (PostgreSQL, MySQL/MariaDB, MongoDB) where the
+  build finds libcurl's WebSocket API and the respective client libs — each
+  degrades to simulation otherwise (see the capability matrix below).
 - **Session management** — thread-safe per-user session storage, cookie
   handling, and response→variable correlation.
 - **Authentication flows** — Basic, Bearer, API Key, Form, OAuth 2.0, Custom.
@@ -43,7 +44,7 @@ or a **pure-Python fallback**. What each protocol actually does today:
 | UDP | ✅ real sockets | ✅ real sockets | Endpoint pool. |
 | MQTT | ✅ real MQTT 3.1.1 over TCP | ⚠️ simulated | Hand-rolled CONNECT/PUBLISH/SUBSCRIBE packets. |
 | WebSocket | ✅ real RFC 6455 (libcurl WS) / ⚠️ simulated fallback | ⚠️ not implemented | Real frames via libcurl's WebSocket API when built with `HAVE_CURL_WEBSOCKETS`; simulated where libcurl lacks WS support. |
-| Database | ✅ real PostgreSQL (libpq) / ⚠️ simulated | ⚠️ not implemented | Real connect/query via libpq when built with `HAVE_LIBPQ`. MySQL/MongoDB still simulated (no client linked). |
+| Database | ✅ real PostgreSQL (libpq) / MySQL (libmysqlclient) / MongoDB (libmongoc), each with ⚠️ simulated fallback | ⚠️ not implemented | Real connect/query when built with `HAVE_LIBPQ` / `HAVE_MYSQL` / `HAVE_MONGOC`; falls back to simulation when a client lib is absent. MongoDB query string is a JSON command document. |
 
 > Where a protocol falls back to simulation it returns realistic-looking
 > responses and timings so you can build and validate scenarios, but it does not

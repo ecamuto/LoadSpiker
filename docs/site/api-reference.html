@@ -161,7 +161,7 @@ results = engine.run_scenario(main_scenario, users=100, duration=60)</code></pre
       <h3 id="database-methods">Database Methods</h3>
 
       <div class="method-sig"><code>engine.database_connect(connection_string, pool_size=10)</code></div>
-      <p>Open a database connection pool. PostgreSQL connects for real via libpq when built with <code>HAVE_LIBPQ</code>; MySQL/MongoDB are simulated. Returns a connection ID string.</p>
+      <p>Open a database connection pool. PostgreSQL (libpq, <code>HAVE_LIBPQ</code>), MySQL/MariaDB (libmysqlclient, <code>HAVE_MYSQL</code>), and MongoDB (libmongoc, <code>HAVE_MONGOC</code>) all connect for real when built with the matching client library, each falling back to simulation otherwise. Returns a connection ID string.</p>
       <pre><code class="language-python">conn_id = engine.database_connect("mysql://user:pass@localhost/mydb", pool_size=20)</code></pre>
 
       <div class="method-sig"><code>engine.database_query(connection_id, query, params=None)</code></div>

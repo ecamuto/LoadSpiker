@@ -63,7 +63,7 @@ This document outlines the features and improvements needed to bring LoadSpiker 
 - **WebSocket Testing**: ✅ Real RFC 6455 via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`); simulated fallback where libcurl lacks WS
 - **TCP Socket Testing**: ✅ Low-level TCP network protocol testing  
 - **UDP Socket Testing**: ✅ Low-level UDP network protocol testing
-- **Database Testing**: ✅ Real PostgreSQL via libpq (`HAVE_LIBPQ`); MySQL/MongoDB simulated (connection-pool & query-timing)
+- **Database Testing**: ✅ Real PostgreSQL (libpq, `HAVE_LIBPQ`), MySQL/MariaDB (libmysqlclient, `HAVE_MYSQL`), and MongoDB (libmongoc, `HAVE_MONGOC`); each falls back to simulated (connection-pool & query-timing) when its client lib is absent
 - **MQTT Testing**: ✅ Real MQTT 3.1.1 CONNECT/PUBLISH/SUBSCRIBE/UNSUBSCRIBE over TCP
 
 **🔄 Remaining Protocols:**

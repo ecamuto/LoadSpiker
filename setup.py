@@ -216,6 +216,64 @@ def get_libpq_flags():
     return [], []
 
 
+def get_mysql_flags():
+    """Return (cflags, libs) for the MySQL/MariaDB client, or ([], []) if absent.
+
+    Prefers Homebrew's keg-only mysql_config; falls back to mysql_config /
+    mariadb_config on PATH.
+    """
+    candidates = [
+        os.path.join(os.environ.get('HOMEBREW_PREFIX', '/opt/homebrew'),
+                     'opt', 'mysql-client', 'bin', 'mysql_config'),
+        'mysql_config',
+        'mariadb_config',
+    ]
+    for mc in candidates:
+        cflags = _run([mc, '--cflags'])
+        libs = _run([mc, '--libs'])
+        if cflags is not None and libs is not None:
+            if VERBOSE_MODE:
+                print(f"📦 MySQL client via {mc}")
+            # mysql_config emits keg-only deps (-lzstd/-lssl/-lcrypto) without
+            # their -L paths; add Homebrew's lib dir so the linker resolves them.
+            brew_lib = os.path.join(os.environ.get('HOMEBREW_PREFIX', '/opt/homebrew'), 'lib')
+            extra = [f'-L{brew_lib}'] if os.path.isdir(brew_lib) else []
+            return cflags.split(), extra + libs.split()
+    if VERBOSE_MODE:
+        print("ℹ️  MySQL client not found — MySQL support will be simulated")
+    return [], []
+
+
+def get_mongoc_flags():
+    """Return (cflags, libs) for the MongoDB C driver, or ([], []) if absent.
+
+    mongo-c-driver 2.x ships pkg-config files named mongoc2/bson2; 1.x uses
+    libmongoc-1.0/libbson-1.0. Try both, preferring the Homebrew pkgconfig dir.
+    """
+    pkg_dir = os.path.join(os.environ.get('HOMEBREW_PREFIX', '/opt/homebrew'),
+                           'opt', 'mongo-c-driver', 'lib', 'pkgconfig')
+    env = dict(os.environ)
+    if os.path.isdir(pkg_dir):
+        existing = env.get('PKG_CONFIG_PATH', '')
+        env['PKG_CONFIG_PATH'] = pkg_dir + (os.pathsep + existing if existing else '')
+    for pkg in ('mongoc2', 'libmongoc-1.0'):
+        try:
+            cflags = subprocess.check_output(
+                ['pkg-config', '--cflags', pkg], stderr=subprocess.DEVNULL, env=env
+            ).decode().strip().split()
+            libs = subprocess.check_output(
+                ['pkg-config', '--libs', pkg], stderr=subprocess.DEVNULL, env=env
+            ).decode().strip().split()
+            if VERBOSE_MODE:
+                print(f"📦 mongo-c-driver via pkg-config ({pkg})")
+            return cflags, libs
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+    if VERBOSE_MODE:
+        print("ℹ️  mongo-c-driver not found — MongoDB support will be simulated")
+    return [], []
+
+
 # =============================================================================
 # Compiler Configuration
 # =============================================================================
@@ -225,6 +283,10 @@ curl_cflags, curl_libs, curl_has_ws = get_curl_flags()
 
 # Get libpq flags (optional — enables real PostgreSQL when present)
 libpq_include_dirs, libpq_libs = get_libpq_flags()
+
+# Get MySQL / MongoDB client flags (optional — enable real backends when present)
+mysql_cflags, mysql_libs = get_mysql_flags()
+mongoc_cflags, mongoc_libs = get_mongoc_flags()
 
 # Warning flags - catch common bugs at compile time
 WARNING_FLAGS = [
@@ -250,14 +312,16 @@ else:
 
 # Combine all compile arguments
 extra_compile_args = (
-    curl_cflags + 
-    OPTIMIZATION_FLAGS + 
-    WARNING_FLAGS + 
+    curl_cflags +
+    mysql_cflags +
+    mongoc_cflags +
+    OPTIMIZATION_FLAGS +
+    WARNING_FLAGS +
     ['-pthread', '-std=c11']
 )
 
 # Combine all link arguments
-extra_link_args = curl_libs + libpq_libs + LINK_FLAGS + ['-pthread']
+extra_link_args = curl_libs + libpq_libs + mysql_libs + mongoc_libs + LINK_FLAGS + ['-pthread']
 
 # Feature macros consumed by the C sources via #ifdef
 feature_macros = [('_GNU_SOURCE', None)]
@@ -265,6 +329,10 @@ if curl_has_ws:
     feature_macros.append(('HAVE_CURL_WEBSOCKETS', '1'))
 if libpq_libs:
     feature_macros.append(('HAVE_LIBPQ', '1'))
+if mysql_libs:
+    feature_macros.append(('HAVE_MYSQL', '1'))
+if mongoc_libs:
+    feature_macros.append(('HAVE_MONGOC', '1'))
 
 if VERBOSE_MODE:
     print(f"🔧 Compile flags: {' '.join(extra_compile_args)}")

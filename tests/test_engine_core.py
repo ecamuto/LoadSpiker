@@ -224,13 +224,18 @@ class TestDatabaseProtocol:
     """Test database protocol methods via engine."""
 
     def test_database_connect_mysql(self, engine):
-        """Database connect for MySQL should return response."""
-        response = engine.database_connect(
-            "mysql://testuser:testpass@localhost:3306/testdb", "mysql"
+        """MySQL connect uses real libmysqlclient; needs a live server, else skips."""
+        cs = os.environ.get(
+            "LOADSPIKER_TEST_MYSQL",
+            "mysql://testuser:testpass@localhost:3306/testdb",
         )
+        response = engine.database_connect(cs, "mysql")
         assert isinstance(response, dict)
-        assert 'success' in response
-        assert response['success'] is True
+        if not response['success']:
+            assert "MySQL" in response.get('error_message', '')
+            pytest.skip("No MySQL server reachable for real libmysqlclient test")
+        assert response['status_code'] == 200
+        assert "Connected to mysql database" in response['body']
 
     def test_database_connect_postgresql(self, engine):
         """PostgreSQL connect uses real libpq; needs a live server, else skips."""
@@ -248,12 +253,17 @@ class TestDatabaseProtocol:
         assert "Connected to postgresql database" in response['body']
 
     def test_database_connect_mongodb(self, engine):
-        """Database connect for MongoDB should return response."""
-        response = engine.database_connect(
-            "mongodb://testuser:testpass@localhost:27017/testdb", "mongodb"
+        """MongoDB connect uses real libmongoc; needs a live server, else skips."""
+        cs = os.environ.get(
+            "LOADSPIKER_TEST_MONGO", "mongodb://localhost:27017/testdb"
         )
+        response = engine.database_connect(cs, "mongodb")
         assert isinstance(response, dict)
-        assert response['success'] is True
+        if not response['success']:
+            assert "MongoDB" in response.get('error_message', '')
+            pytest.skip("No MongoDB server reachable for real libmongoc test")
+        assert response['status_code'] == 200
+        assert "Connected to mongodb database" in response['body']
 
     def test_database_connect_invalid_type(self, engine):
         """Database connect with invalid type should fail."""
@@ -270,13 +280,15 @@ class TestDatabaseProtocol:
         assert response['success'] is False
 
     def test_database_disconnect(self, engine):
-        """Database disconnect should work after connect."""
-        engine.database_connect(
-            "mysql://testuser:testpass@localhost:3306/testdb", "mysql"
+        """Database disconnect should work after a real connect, else skips."""
+        cs = os.environ.get(
+            "LOADSPIKER_TEST_MYSQL",
+            "mysql://testuser:testpass@localhost:3306/testdb",
         )
-        response = engine.database_disconnect(
-            "mysql://testuser:testpass@localhost:3306/testdb"
-        )
+        connect = engine.database_connect(cs, "mysql")
+        if not connect['success']:
+            pytest.skip("No MySQL server reachable for real libmysqlclient test")
+        response = engine.database_disconnect(cs)
         assert isinstance(response, dict)
         assert response['success'] is True
 

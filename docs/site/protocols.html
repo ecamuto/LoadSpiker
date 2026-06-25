@@ -352,7 +352,7 @@ engine.mqtt_disconnect(mqtt_id)</code></pre>
       <h2 id="database">Database</h2>
 
       <div class="callout">
-        <strong>PostgreSQL is real:</strong> when built with libpq (<code>HAVE_LIBPQ</code>), PostgreSQL connects and queries for real via <code>PQconnectdb</code>/<code>PQexec</code>. MySQL and MongoDB remain simulated (no client library linked) &mdash; they model connection-pool overhead and query timing so you can exercise pool exhaustion and connection handling under load. Connections are isolated per virtual user via <code>conn_id</code>.
+        <strong>PostgreSQL, MySQL, and MongoDB are real:</strong> when built with the matching client library, each backend connects and queries for real &mdash; PostgreSQL via <code>PQconnectdb</code>/<code>PQexec</code> (<code>HAVE_LIBPQ</code>), MySQL/MariaDB via <code>mysql_real_connect</code>/<code>mysql_query</code> (<code>HAVE_MYSQL</code>), and MongoDB via <code>mongoc_client_new</code> + <code>mongoc_client_command_simple</code> (<code>HAVE_MONGOC</code>; the query string is a JSON command document). Where a client library is absent, that backend falls back to a simulated path that models connection-pool overhead and query timing so you can still exercise pool exhaustion and connection handling under load. Connections are isolated per virtual user via <code>conn_id</code>.
       </div>
 
       <h3>Connection Strings</h3>

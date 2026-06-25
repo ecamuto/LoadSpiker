@@ -189,7 +189,7 @@ int udp_send(const char* host, int port, const char* conn_id, const char* data, 
     int fd = ep->socket_fd;
     pthread_mutex_unlock(&udp_pool_mutex);
 
-    char port_str[8];
+    char port_str[16];
     snprintf(port_str, sizeof(port_str), "%d", port);
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));

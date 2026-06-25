@@ -131,7 +131,7 @@ int tcp_connect(const char* host, int port, const char* conn_id, response_t* res
         return -1;
     }
 
-    char port_str[8];
+    char port_str[16];
     snprintf(port_str, sizeof(port_str), "%d", port);
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));

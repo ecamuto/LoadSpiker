@@ -109,7 +109,7 @@ int database_parse_connection_string(const char* connection_string, char* host, 
         *port = atoi(colon + 1);
     } else {
         // Host without port
-        size_t host_len = slash ? (slash - url_part) : strlen(url_part);
+        size_t host_len = slash ? (size_t)(slash - url_part) : strlen(url_part);
         strncpy(host, url_part, host_len);
         host[host_len] = '\0';
 

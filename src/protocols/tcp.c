@@ -27,6 +27,23 @@ static const char* effective_conn_id(const char* conn_id) {
     return (conn_id && conn_id[0]) ? conn_id : "default";
 }
 
+/* Probe whether a pooled stream socket is still usable. The pools are
+   process-global statics, so when the OS recycles an ephemeral port a later
+   connect can match a stale slot whose fd points at a now-closed socket and
+   wrongly report "already established". A non-blocking MSG_PEEK distinguishes
+   the three cases without consuming data:
+     >0  -> data buffered, clearly alive
+      0  -> peer performed an orderly shutdown (dead)
+     <0  -> EAGAIN/EWOULDBLOCK means alive-but-idle; anything else is dead. */
+static bool tcp_fd_is_alive(int fd) {
+    if (fd < 0) return false;
+    char probe;
+    ssize_t n = recv(fd, &probe, 1, MSG_PEEK | MSG_DONTWAIT);
+    if (n > 0) return true;
+    if (n == 0) return false;
+    return (errno == EAGAIN || errno == EWOULDBLOCK);
+}
+
 int tcp_parse_url(const char* url, char* host, int* port) {
     if (!url || !host || !port) {
         return -1;
@@ -111,13 +128,21 @@ int tcp_connect(const char* host, int port, const char* conn_id, response_t* res
         return -1;
     }
     if (conn->is_connected) {
-        pthread_mutex_unlock(&tcp_pool_mutex);
-        response->success = true;
-        response->status_code = 200;
-        snprintf(response->body, sizeof(response->body),
-                "TCP connection already established to %s:%d", host, port);
-        response->response_time_us = get_time_us() - start_time;
-        return 0;
+        if (tcp_fd_is_alive(conn->socket_fd)) {
+            pthread_mutex_unlock(&tcp_pool_mutex);
+            response->success = true;
+            response->status_code = 200;
+            snprintf(response->body, sizeof(response->body),
+                    "TCP connection already established to %s:%d", host, port);
+            response->response_time_us = get_time_us() - start_time;
+            return 0;
+        }
+        /* Stale slot: drop the dead fd and fall through to reconnect. The slot
+           stays reserved (conn pointer remains valid) and is republished with a
+           fresh socket in critical section 2 below. */
+        if (conn->socket_fd >= 0) close(conn->socket_fd);
+        conn->socket_fd = -1;
+        conn->is_connected = false;
     }
     pthread_mutex_unlock(&tcp_pool_mutex);
 

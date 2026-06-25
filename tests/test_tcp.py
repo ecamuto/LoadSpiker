@@ -319,6 +319,44 @@ class TestTCPErrorHandling:
         assert response['error_message'] != ''
 
 
+class TestTCPStaleSlotLiveness:
+    """Regression: a pooled slot whose socket has died must not be honoured as
+    'already established'. tcp_connect probes the fd with a non-blocking peek
+    and reconnects (or fails cleanly) instead of returning a stale success."""
+
+    def test_dead_connection_not_reported_alive(self, engine):
+        """After the server goes away, re-connect must not falsely succeed."""
+        server = MockTCPServer()
+        port = server.start()
+
+        connect_response = engine.tcp_connect('localhost', port, timeout_ms=5000)
+        assert connect_response['success'] is True
+
+        # Kill the server: the pooled fd is now dead (peer closed / port freed).
+        server.stop()
+        time.sleep(0.2)
+
+        # The liveness probe must reject the stale slot. The reconnect attempt
+        # then fails (nothing is listening), so success must be False — the bug
+        # was returning "already established" on the dead socket.
+        reconnect = engine.tcp_connect('localhost', port, timeout_ms=1000)
+        assert reconnect['success'] is False
+        assert 'already established' not in reconnect.get('body', '')
+
+    def test_live_connection_still_reported_alive(self, engine, mock_tcp_server):
+        """A genuinely live slot is still reported as already established."""
+        server, port = mock_tcp_server
+
+        first = engine.tcp_connect('localhost', port, timeout_ms=5000)
+        assert first['success'] is True
+
+        second = engine.tcp_connect('localhost', port, timeout_ms=5000)
+        assert second['success'] is True
+        assert 'already established' in second['body']
+
+        engine.tcp_disconnect('localhost', port)
+
+
 class TestTCPMixedProtocolScenarios:
     """Test TCP in mixed protocol scenarios"""
     

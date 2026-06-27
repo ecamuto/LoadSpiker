@@ -334,8 +334,10 @@ static int database_mongo_query(mongoc_client_t* client, const char* dbname,
     if (!bson_init_from_json(&cmd, query, -1, &error)) {
         response->success = false;
         response->status_code = 400;
+        /* Bound %s with a precision: bson_error_t.message is a fixed char[504],
+           so without it gcc's -Wformat-truncation warns it may not fit. */
         snprintf(response->error_message, sizeof(response->error_message),
-                "Invalid MongoDB command JSON: %s", error.message);
+                "Invalid MongoDB command JSON: %.200s", error.message);
         response->response_time_us = get_time_us() - start_time;
         return -1;
     }
@@ -351,7 +353,7 @@ static int database_mongo_query(mongoc_client_t* client, const char* dbname,
         response->success = false;
         response->status_code = 500;
         snprintf(response->error_message, sizeof(response->error_message),
-                "MongoDB command failed: %s", error.message);
+                "MongoDB command failed: %.200s", error.message);
         response->response_time_us = get_time_us() - start_time;
         return -1;
     }
@@ -512,7 +514,7 @@ int database_connect(const char* connection_string, const char* conn_id, const c
         bson_destroy(&ping);
         if (!ok) {
             snprintf(response->error_message, sizeof(response->error_message),
-                    "MongoDB connection failed: %s", error.message);
+                    "MongoDB connection failed: %.200s", error.message);
             mongoc_client_destroy(client);
             response->success = false;
             response->status_code = 500;

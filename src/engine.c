@@ -143,10 +143,12 @@ int engine_convert_http_request(const http_request_t* http_req, request_t* gener
     memset(generic_req, 0, sizeof(request_t));
     
     generic_req->protocol = PROTOCOL_HTTP;
-    strncpy(generic_req->method, http_req->method, sizeof(generic_req->method) - 1);
-    strncpy(generic_req->url, http_req->url, sizeof(generic_req->url) - 1);
-    strncpy(generic_req->headers, http_req->headers, sizeof(generic_req->headers) - 1);
-    strncpy(generic_req->body, http_req->body, sizeof(generic_req->body) - 1);
+    /* snprintf (not strncpy) so the copy always null-terminates and gcc's
+       -Wstringop-truncation doesn't fire on these same-sized field copies. */
+    snprintf(generic_req->method, sizeof(generic_req->method), "%s", http_req->method);
+    snprintf(generic_req->url, sizeof(generic_req->url), "%s", http_req->url);
+    snprintf(generic_req->headers, sizeof(generic_req->headers), "%s", http_req->headers);
+    snprintf(generic_req->body, sizeof(generic_req->body), "%s", http_req->body);
     generic_req->timeout_ms = http_req->timeout_ms;
     
     return 0;
@@ -301,11 +303,13 @@ int engine_convert_http_response(const response_t* generic_resp, http_response_t
     memset(http_resp, 0, sizeof(http_response_t));
     
     http_resp->status_code = generic_resp->status_code;
-    strncpy(http_resp->headers, generic_resp->headers, sizeof(http_resp->headers) - 1);
-    strncpy(http_resp->body, generic_resp->body, sizeof(http_resp->body) - 1);
+    /* snprintf for the same reason as engine_convert_http_request: guaranteed
+       termination, no gcc -Wstringop-truncation on these same-sized copies. */
+    snprintf(http_resp->headers, sizeof(http_resp->headers), "%s", generic_resp->headers);
+    snprintf(http_resp->body, sizeof(http_resp->body), "%s", generic_resp->body);
     http_resp->response_time_us = generic_resp->response_time_us;
     http_resp->success = generic_resp->success;
-    strncpy(http_resp->error_message, generic_resp->error_message, sizeof(http_resp->error_message) - 1);
+    snprintf(http_resp->error_message, sizeof(http_resp->error_message), "%s", generic_resp->error_message);
     
     return 0;
 }

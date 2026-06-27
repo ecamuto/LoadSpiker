@@ -19,6 +19,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from loadspiker import Engine
 from loadspiker.scenarios import DatabaseScenario, MixedProtocolScenario
 
+# MySQL and MongoDB now use real client drivers (libmysqlclient / libmongoc)
+# when available, mirroring the PostgreSQL/libpq path. These tests connect to a
+# live server when one is reachable and skip otherwise. Override the targets
+# with LOADSPIKER_TEST_MYSQL / LOADSPIKER_TEST_MONGO.
+MYSQL_CONN = os.environ.get(
+    "LOADSPIKER_TEST_MYSQL", "mysql://testuser:testpass@localhost:3306/testdb")
+MONGO_CONN = os.environ.get(
+    "LOADSPIKER_TEST_MONGO", "mongodb://localhost:27017/testdb")
+
+
 class TestDatabaseProtocol(unittest.TestCase):
     """Test database protocol functionality"""
     
@@ -30,20 +40,38 @@ class TestDatabaseProtocol(unittest.TestCase):
     def tearDown(self):
         """Clean up after tests"""
         pass
-    
+
+    def _require_mysql(self):
+        """Connect to MySQL or skip if no server is reachable. Returns conn str."""
+        response = self.engine.database_connect(MYSQL_CONN, "mysql")
+        if not response['success']:
+            # Real driver: no reachable server -> reports a MySQL error.
+            self.assertIn("MySQL", response.get('error_message', ''))
+            self.skipTest("No MySQL server reachable for real libmysqlclient test")
+        return MYSQL_CONN
+
+    def _require_mongo(self):
+        """Connect to MongoDB or skip if no server is reachable. Returns conn str."""
+        response = self.engine.database_connect(MONGO_CONN, "mongodb")
+        if not response['success']:
+            self.assertIn("MongoDB", response.get('error_message', ''))
+            self.skipTest("No MongoDB server reachable for real libmongoc test")
+        return MONGO_CONN
+
     def test_mysql_connection(self):
-        """Test MySQL database connection"""
+        """Test MySQL database connection (real libmysqlclient; needs a live server)"""
         print("\n🔗 Testing MySQL Connection...")
-        
-        connection_string = "mysql://testuser:testpass@localhost:3306/testdb"
-        
-        response = self.engine.database_connect(connection_string, "mysql")
-        
-        self.assertTrue(response['success'])
+
+        response = self.engine.database_connect(MYSQL_CONN, "mysql")
+
+        if not response['success']:
+            self.assertIn("MySQL", response.get('error_message', ''))
+            self.skipTest("No MySQL server reachable for real libmysqlclient test")
+
         self.assertEqual(response['status_code'], 200)
         self.assertIn("Connected to mysql database", response['body'])
         self.assertGreater(response['response_time_us'], 0)
-        
+
         print(f"   ✅ MySQL connection successful in {response['response_time_us']/1000:.2f}ms")
         print(f"   📄 Response: {response['body']}")
     
@@ -70,150 +98,124 @@ class TestDatabaseProtocol(unittest.TestCase):
         print(f"   📄 Response: {response['body']}")
     
     def test_mongodb_connection(self):
-        """Test MongoDB database connection"""
+        """Test MongoDB database connection (real libmongoc; needs a live server)"""
         print("\n🔗 Testing MongoDB Connection...")
-        
-        connection_string = "mongodb://testuser:testpass@localhost:27017/testdb"
-        
-        response = self.engine.database_connect(connection_string, "mongodb")
-        
-        self.assertTrue(response['success'])
+
+        response = self.engine.database_connect(MONGO_CONN, "mongodb")
+
+        if not response['success']:
+            self.assertIn("MongoDB", response.get('error_message', ''))
+            self.skipTest("No MongoDB server reachable for real libmongoc test")
+
         self.assertEqual(response['status_code'], 200)
         self.assertIn("Connected to mongodb database", response['body'])
-        
+
         print(f"   ✅ MongoDB connection successful in {response['response_time_us']/1000:.2f}ms")
         print(f"   📄 Response: {response['body']}")
-    
+
     def test_auto_detect_database_type(self):
-        """Test automatic database type detection"""
+        """Test automatic database type detection.
+
+        All three backends use real drivers, so a successful connect requires a
+        live server; either way the response confirms the right driver was
+        selected (success body, or a driver-named error message).
+        """
         print("\n🔍 Testing Auto Database Type Detection...")
-        
-        # Test MySQL auto-detection
-        response = self.engine.database_connect("mysql://user:pass@host/db", "auto")
-        self.assertTrue(response['success'])
-        self.assertIn("mysql", response['body'])
-        
-        # Test PostgreSQL auto-detection. PostgreSQL uses the real libpq driver,
-        # so success requires a live server; either way the response confirms the
-        # postgresql driver was selected (success body or PG error message).
-        response = self.engine.database_connect("postgresql://user:pass@host/db", "auto")
-        if response['success']:
-            self.assertIn("postgresql", response['body'])
-        else:
-            self.assertIn("PostgreSQL", response.get('error_message', ''))
-        
-        # Test MongoDB auto-detection
-        response = self.engine.database_connect("mongodb://user:pass@host/db", "auto")
-        self.assertTrue(response['success'])
-        self.assertIn("mongodb", response['body'])
-        
-        print("   ✅ Auto-detection working for all database types")
-    
-    def test_database_select_query(self):
-        """Test SELECT query execution"""
-        print("\n📊 Testing SELECT Query...")
-        
-        connection_string = "mysql://testuser:testpass@localhost:3306/testdb"
-        
-        # First connect
-        connect_response = self.engine.database_connect(connection_string, "mysql")
-        self.assertTrue(connect_response['success'])
-        
-        # Execute SELECT query
-        query = "SELECT id, name, email FROM users WHERE active = 1"
-        response = self.engine.database_query(connection_string, query)
-        
-        self.assertTrue(response['success'])
-        self.assertEqual(response['status_code'], 200)
-        self.assertIn("3 rows returned", response['body'])
-        
-        # Check if response contains database-specific data
-        if 'database_data' in response:
-            db_data = response['database_data']
-            self.assertEqual(db_data['rows_returned'], 3)
-            self.assertEqual(db_data['rows_affected'], 0)
-            self.assertTrue(len(db_data['result_set']) > 0)
-        
-        print(f"   ✅ SELECT query executed in {response['response_time_us']/1000:.2f}ms")
-        print(f"   📄 Response: {response['body']}")
-    
-    def test_database_insert_query(self):
-        """Test INSERT query execution"""
-        print("\n➕ Testing INSERT Query...")
-        
-        connection_string = "mysql://testuser:testpass@localhost:3306/testdb"
-        
-        # Connect first
-        self.engine.database_connect(connection_string, "mysql")
-        
-        # Execute INSERT query
-        query = "INSERT INTO users (name, email) VALUES ('John Doe', 'john@example.com')"
-        response = self.engine.database_query(connection_string, query)
-        
-        self.assertTrue(response['success'])
-        self.assertEqual(response['status_code'], 200)
-        self.assertIn("1 row(s) inserted", response['body'])
-        
-        print(f"   ✅ INSERT query executed in {response['response_time_us']/1000:.2f}ms")
-        print(f"   📄 Response: {response['body']}")
-    
-    def test_database_update_query(self):
-        """Test UPDATE query execution"""
-        print("\n📝 Testing UPDATE Query...")
-        
-        connection_string = "mysql://testuser:testpass@localhost:3306/testdb"
-        
-        # Connect first
-        self.engine.database_connect(connection_string, "mysql")
-        
-        # Execute UPDATE query
-        query = "UPDATE users SET email = 'newemail@example.com' WHERE name = 'John Doe'"
-        response = self.engine.database_query(connection_string, query)
-        
-        self.assertTrue(response['success'])
-        self.assertEqual(response['status_code'], 200)
-        self.assertIn("2 row(s) updated", response['body'])
-        
-        print(f"   ✅ UPDATE query executed in {response['response_time_us']/1000:.2f}ms")
-        print(f"   📄 Response: {response['body']}")
-    
-    def test_database_delete_query(self):
-        """Test DELETE query execution"""
-        print("\n🗑️  Testing DELETE Query...")
-        
-        connection_string = "mysql://testuser:testpass@localhost:3306/testdb"
-        
-        # Connect first
-        self.engine.database_connect(connection_string, "mysql")
-        
-        # Execute DELETE query
-        query = "DELETE FROM users WHERE id = 999"
-        response = self.engine.database_query(connection_string, query)
-        
-        self.assertTrue(response['success'])
-        self.assertEqual(response['status_code'], 200)
-        self.assertIn("1 row(s) deleted", response['body'])
-        
-        print(f"   ✅ DELETE query executed in {response['response_time_us']/1000:.2f}ms")
-        print(f"   📄 Response: {response['body']}")
-    
+
+        cases = [
+            ("mysql://user:pass@host/db", "mysql", "MySQL"),
+            ("postgresql://user:pass@host/db", "postgresql", "PostgreSQL"),
+            ("mongodb://localhost:27017/db", "mongodb", "MongoDB"),
+        ]
+        for conn, body_token, err_token in cases:
+            response = self.engine.database_connect(conn, "auto")
+            if response['success']:
+                self.assertIn(body_token, response['body'])
+            else:
+                self.assertIn(err_token, response.get('error_message', ''))
+
+        print("   ✅ Auto-detection selects the right driver for all database types")
+
+    def test_mysql_crud_lifecycle(self):
+        """Real MySQL SELECT/INSERT/UPDATE/DELETE via a temporary table.
+
+        Uses a TEMPORARY TABLE so no pre-existing schema is required and nothing
+        persists. Skips when no MySQL server is reachable.
+        """
+        print("\n📊 Testing MySQL CRUD lifecycle...")
+        conn = self._require_mysql()
+
+        # Sanity SELECT
+        r = self.engine.database_query(conn, "SELECT 1 AS n")
+        self.assertTrue(r['success'], r.get('error_message'))
+        self.assertIn("1 rows returned", r['body'])
+
+        # Temp table avoids needing a known schema and auto-drops on disconnect.
+        r = self.engine.database_query(
+            conn, "CREATE TEMPORARY TABLE ls_test (id INT PRIMARY KEY, name VARCHAR(32))")
+        self.assertTrue(r['success'], r.get('error_message'))
+
+        r = self.engine.database_query(conn, "INSERT INTO ls_test VALUES (1,'a'),(2,'b')")
+        self.assertTrue(r['success'], r.get('error_message'))
+        self.assertIn("2 row(s) affected", r['body'])
+
+        r = self.engine.database_query(conn, "UPDATE ls_test SET name='c' WHERE id IN (1,2)")
+        self.assertTrue(r['success'], r.get('error_message'))
+        self.assertIn("2 row(s) affected", r['body'])
+
+        r = self.engine.database_query(conn, "SELECT id, name FROM ls_test ORDER BY id")
+        self.assertTrue(r['success'], r.get('error_message'))
+        self.assertIn("2 rows returned", r['body'])
+        if 'database_data' in r:
+            self.assertIn("id,name", r['database_data']['result_set'])
+
+        r = self.engine.database_query(conn, "DELETE FROM ls_test WHERE id = 1")
+        self.assertTrue(r['success'], r.get('error_message'))
+        self.assertIn("1 row(s) affected", r['body'])
+
+        print("   ✅ MySQL CRUD lifecycle verified")
+
+    def test_mysql_query_error(self):
+        """A malformed query against real MySQL surfaces a driver error."""
+        conn = self._require_mysql()
+        r = self.engine.database_query(conn, "SELECT * FROM no_such_table_xyz")
+        self.assertFalse(r['success'])
+        self.assertEqual(r['status_code'], 500)
+        self.assertIn("MySQL", r.get('error_message', ''))
+
+    def test_mongodb_command(self):
+        """Real MongoDB command: query string is a JSON command document."""
+        print("\n📊 Testing MongoDB command...")
+        conn = self._require_mongo()
+
+        # ping is always available and returns {"ok": 1}.
+        r = self.engine.database_query(conn, '{"ping": 1}')
+        self.assertTrue(r['success'], r.get('error_message'))
+        if 'database_data' in r:
+            self.assertIn("ok", r['database_data']['result_set'])
+
+        print("   ✅ MongoDB command executed")
+
+    def test_mongodb_invalid_command_json(self):
+        """Invalid command JSON is rejected before hitting the server."""
+        conn = self._require_mongo()
+        r = self.engine.database_query(conn, "not valid json")
+        self.assertFalse(r['success'])
+        self.assertEqual(r['status_code'], 400)
+        self.assertIn("MongoDB command JSON", r.get('error_message', ''))
+
     def test_database_disconnect(self):
-        """Test database disconnection"""
+        """Test database disconnection (real MySQL; needs a live server)"""
         print("\n🔌 Testing Database Disconnect...")
-        
-        connection_string = "mysql://testuser:testpass@localhost:3306/testdb"
-        
-        # Connect first
-        connect_response = self.engine.database_connect(connection_string, "mysql")
-        self.assertTrue(connect_response['success'])
-        
-        # Disconnect
-        response = self.engine.database_disconnect(connection_string)
-        
+
+        conn = self._require_mysql()
+
+        response = self.engine.database_disconnect(conn)
+
         self.assertTrue(response['success'])
         self.assertEqual(response['status_code'], 200)
         self.assertIn("Database connection closed successfully", response['body'])
-        
+
         print(f"   ✅ Disconnect successful in {response['response_time_us']/1000:.2f}ms")
         print(f"   📄 Response: {response['body']}")
     

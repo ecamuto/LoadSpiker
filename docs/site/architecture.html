@@ -219,8 +219,8 @@ else:
           <tr>
             <td><code>database.c</code></td>
             <td>Database</td>
-            <td><span class="badge badge-green">PostgreSQL real</span> / <span class="badge badge-yellow">MySQL·Mongo sim</span></td>
-            <td>Real PostgreSQL via libpq (<code>HAVE_LIBPQ</code>); MySQL/MongoDB simulate pool overhead. Bound through the Python extension, isolated per user via <code>conn_id</code>.</td>
+            <td><span class="badge badge-green">PostgreSQL / MySQL / MongoDB real</span> <span class="badge badge-yellow">sim fallback</span></td>
+            <td>Real PostgreSQL (libpq, <code>HAVE_LIBPQ</code>), MySQL/MariaDB (libmysqlclient, <code>HAVE_MYSQL</code>), and MongoDB (libmongoc, <code>HAVE_MONGOC</code>), each simulating pool overhead when its client lib is absent. Bound through the Python extension, isolated per user via <code>conn_id</code>.</td>
           </tr>
         </tbody>
       </table>

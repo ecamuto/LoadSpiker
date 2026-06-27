@@ -77,10 +77,23 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       libcurl lacks WS). The extension's WS methods now release the GIL during
       I/O. Verified end-to-end against a local RFC 6455 echo server (new
       `mock_websocket_server` fixture).
-- [x] 🔴 **Database: real PostgreSQL.** `database.c` connects/queries real
-      PostgreSQL via libpq (`PQconnectdb`/`PQexec`), gated by `HAVE_LIBPQ`.
-      MySQL/MongoDB remain simulated (no client linked). Real connect verified
-      against a live server; PG tests skip when none is reachable.
+- [x] 🔴 **Database: real PostgreSQL / MySQL / MongoDB.** `database.c` connects
+      and queries real backends, each gated by a feature macro with a simulated
+      fallback when the client lib is absent:
+      - **PostgreSQL** via libpq (`PQconnectdb`/`PQexec`), `HAVE_LIBPQ`.
+      - **MySQL/MariaDB** via libmysqlclient (`mysql_real_connect`/`mysql_query`,
+        forced `MYSQL_PROTOCOL_TCP` so `localhost` dials host:port not a socket),
+        `HAVE_MYSQL`. SELECT builds a CSV result_set; other statements report
+        affected rows.
+      - **MongoDB** via libmongoc (`mongoc_client_new` + a ping to fail fast;
+        the query string is a JSON command document run through
+        `mongoc_client_command_simple`, reply serialized to result_set),
+        `HAVE_MONGOC`. One-time `mongoc_init()` via `pthread_once`.
+      setup.py detects all three (`mysql_config`, pkg-config `mongoc2`/
+      `libmongoc-1.0`). Real connect/query/CRUD verified against live MySQL 8 and
+      MongoDB 7 containers; all DB tests skip cleanly when no server is reachable
+      (override targets via `LOADSPIKER_TEST_MYSQL` / `LOADSPIKER_TEST_MONGO` /
+      `LOADSPIKER_TEST_PG`).
 - [x] 🟡 `websocket.c` clock unified to the shared monotonic `get_time_us()`
       (removed the local `gettimeofday` helper).
 
@@ -113,7 +126,11 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       asserting (broad `try/except` swallowed failures) and/or hit
       `httpbin.org`. The `tests/` suite supersedes them. Purpose-written
       assertions / data-driven / WebSocket unit tests (the genuine coverage gaps)
-      are left as a follow-up rather than salvaging the scratch scripts.
+      were the follow-up — now done: `tests/test_assertions.py` (all assertion
+      types + groups + `run_assertions`), `tests/test_data_sources.py` (CSV load,
+      opt-in/leading-zero-safe coercion per P1, all distribution strategies),
+      and WebSocket connect/send/close already covered by
+      `tests/test_engine_core.py` against the real RFC 6455 mock server.
 
 ---
 
@@ -130,8 +147,13 @@ From [SECURITY_AUDIT.md](SECURITY_AUDIT.md). None are memory-safety holes.
       Isolated suite runs are now green 3×/3× (217 passed). Caveat: hammering the
       full suite many times back-to-back can still fail via real ephemeral-port
       exhaustion (sockets in TIME_WAIT) — an environment limit, not a code bug,
-      and absent in isolated CI runs. A deeper hardening would be to liveness-
-      check the fd before honouring an "already established" slot.
+      and absent in isolated CI runs.
+  - [x] **fd liveness-check.** Done: `tcp_connect` now probes a pooled slot's
+        socket with a non-blocking `recv(MSG_PEEK | MSG_DONTWAIT)`
+        (`tcp_fd_is_alive`) before honouring an "already established" slot. A
+        recycled/dead fd is closed and the slot reconnected instead of returning
+        a stale success. Regression: `TestTCPStaleSlotLiveness` in
+        `tests/test_tcp.py` (dead slot rejected, live slot still honoured).
 
 - [x] 🟠 **Run AddressSanitizer.** Done. `make test-asan` now builds a standalone
       natively-instrumented harness (`tests/asan_check.c`, mirroring the tsan

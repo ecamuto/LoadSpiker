@@ -11,6 +11,10 @@ Thank you for your interest in contributing to LoadSpiker! This document provide
 - libcurl development headers
 - pkg-config
 - Make
+- Optional, for the real database backends (each degrades to simulation if absent):
+  - libpq (PostgreSQL) — enables `HAVE_LIBPQ`
+  - libmysqlclient / MariaDB Connector/C (MySQL) — enables `HAVE_MYSQL`
+  - mongo-c-driver (MongoDB) — enables `HAVE_MONGOC`
 
 ### Setting up the Development Environment
 

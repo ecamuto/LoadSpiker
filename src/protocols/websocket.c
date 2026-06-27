@@ -151,9 +151,12 @@ int websocket_connect(const char* url, const char* subprotocol, response_t* resp
     response->response_time_us = get_time_us() - start_time;
     response->success = true;
 
-    // Set WebSocket-specific response data
-    strncpy(response->protocol_data.websocket.subprotocol, ctx->subprotocol,
-            sizeof(response->protocol_data.websocket.subprotocol) - 1);
+    // Set WebSocket-specific response data. snprintf (not strncpy) so the copy
+    // always terminates and gcc's -Wstringop-truncation doesn't fire on this
+    // same-sized field copy.
+    snprintf(response->protocol_data.websocket.subprotocol,
+             sizeof(response->protocol_data.websocket.subprotocol), "%s",
+             ctx->subprotocol);
 
     return 0;
 }

@@ -160,11 +160,16 @@ typedef struct {
           <tr><td><code>websocket_connect</code></td><td><code>py_websocket_connect</code></td><td>Initiate WebSocket connection</td></tr>
           <tr><td><code>websocket_send</code></td><td><code>py_websocket_send</code></td><td>Send WebSocket message</td></tr>
           <tr><td><code>websocket_close</code></td><td><code>py_websocket_close</code></td><td>Close WebSocket connection</td></tr>
+          <tr><td><code>tcp_connect</code> / <code>tcp_send</code> / <code>tcp_receive</code> / <code>tcp_disconnect</code></td><td><code>LoadTestEngine_tcp_*</code></td><td>TCP connect / send / receive / disconnect</td></tr>
+          <tr><td><code>udp_create_endpoint</code> / <code>udp_send</code> / <code>udp_receive</code> / <code>udp_close_endpoint</code></td><td><code>LoadTestEngine_udp_*</code></td><td>UDP endpoint create / send / receive / close</td></tr>
+          <tr><td><code>mqtt_connect</code> / <code>mqtt_publish</code> / <code>mqtt_subscribe</code> / <code>mqtt_unsubscribe</code> / <code>mqtt_disconnect</code></td><td><code>LoadTestEngine_mqtt_*</code></td><td>MQTT connect / publish / subscribe / unsubscribe / disconnect</td></tr>
+          <tr><td><code>database_connect</code> / <code>database_query</code> / <code>database_disconnect</code></td><td><code>LoadTestEngine_database_*</code></td><td>DB connect / query / disconnect</td></tr>
+          <tr><td><code>reset_connection_pools</code></td><td><code>LoadTestEngine_reset_connection_pools</code></td><td>Reset process-global protocol pools (test isolation)</td></tr>
         </tbody>
       </table>
 
-      <div class="callout warn">
-        <strong>Missing Python Bindings:</strong> The C implementations for TCP (<code>tcp.c</code>), UDP (<code>udp.c</code>), MQTT (<code>mqtt.c</code>), and Database (<code>database.c</code>) exist and compile correctly, but they are <strong>not yet exposed</strong> in <code>python_extension.c</code>. Only WebSocket is exposed beyond HTTP. This means calling <code>engine.tcp_connect()</code>, <code>engine.mqtt_connect()</code>, etc. from Python will raise <code>AttributeError</code> until the bindings are added.
+      <div class="callout info">
+        <strong>Python Bindings:</strong> The C implementations for TCP (<code>tcp.c</code>), UDP (<code>udp.c</code>), MQTT (<code>mqtt.c</code>), and Database (<code>database.c</code>) are <strong>all exposed</strong> in <code>python_extension.c</code> (each with a <code>PyMethodDef</code> entry and a GIL-releasing wrapper), alongside HTTP and WebSocket. <code>engine.tcp_connect()</code>, <code>engine.mqtt_connect()</code>, etc. are callable directly. Where a build lacks an optional client lib (libcurl WS, libpq/libmysqlclient/libmongoc) the binding still works but the protocol degrades to a simulated path.
       </div>
 
       <p>Use the helper to check at runtime:</p>

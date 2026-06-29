@@ -6,7 +6,7 @@ This document provides an extensive analysis of the LoadSpiker codebase, a high-
 
 **Note:** Issues identified in the original analysis have been addressed:
 - **MQTT Password Storage**: Fixed - passwords are now zeroed after connection establishment
-- **SQL Injection in database.c**: Now relevant for all real backends. PostgreSQL (`PQexec`, `HAVE_LIBPQ`) and MySQL (`mysql_query`, `HAVE_MYSQL`) run the query string verbatim; MongoDB (`HAVE_MONGOC`) runs the string as a JSON command document. A query/command assembled from untrusted data is injectable. Load-test scenarios author their own SQL/commands, so treat construction as caller responsibility and prefer parameterized queries / trusted literals.
+- **SQL Injection in database.c**: Now relevant for all real backends. PostgreSQL (`PQexec`, `HAVE_LIBPQ`) and MySQL (`mysql_query`, `HAVE_MYSQL`) run the query string verbatim; MongoDB (`HAVE_MONGOC`) runs the string as a JSON command document. A query/command assembled from untrusted data is injectable. Load-test scenarios author their own SQL/commands, so treat construction as caller responsibility and prefer parameterized queries / trusted literals. Tracked as **V15 (By design)** in the [Security & Correctness Audit](SECURITY_AUDIT.md) — same trust boundary as scenario code execution (V13).
 - **TLS/SSL Support**: Documented as feature enhancement, not a vulnerability in current implementation
 - **Memory Management Issues**: Fixed - cleanup functions added to all protocol files (tcp_cleanup_all, udp_cleanup_all, mqtt_cleanup_all, websocket_cleanup_all, database_cleanup_all) and called from engine_destroy()
 - **Thread Safety Problems**: Hardened in the concurrency pass - per-pool mutexes narrowed to the slot lookup with blocking I/O outside the lock; per-user TCP/UDP/Database isolation; `getaddrinfo`/`rand_r` replace non-reentrant calls. Verified under ThreadSanitizer (`make tsan`). Real WebSocket (libcurl WS) and real PostgreSQL (libpq) release the GIL during I/O.
@@ -86,8 +86,9 @@ the query string is a JSON command document). Connections are isolated per
 virtual user via `conn_id`.
 
 **Security note:** real `PQexec`/`mysql_query` execute the query string verbatim
-— see the SQL injection note in the Executive Summary. For MongoDB the analogous
-risk is unsanitized JSON command documents; build them from trusted input.
+— see the SQL injection note in the Executive Summary and **V15** in the
+[Security & Correctness Audit](SECURITY_AUDIT.md). For MongoDB the analogous risk
+is unsanitized JSON command documents; build them from trusted input.
 
 ---
 
@@ -390,39 +391,36 @@ All sections of this analysis have been addressed. Below is the updated status:
 - **Memory Management**: Cleanup functions for all protocol pools
 - **Buffer Safety**: Verified safe strncpy/snprintf usage across codebase
 
-### Critical: Missing C Extension Protocol Bindings ⚠️
+### Resolved: C Extension Protocol Bindings ✓
 
 **Location:** `src/python_extension.c`
 
-**Severity:** HIGH — The C extension only exposes 7 methods to Python:
-- `execute_request` (HTTP)
-- `start_load_test`
-- `get_metrics`
-- `reset_metrics`
-- `websocket_connect`
-- `websocket_send`
-- `websocket_close`
+**Status:** FIXED — all protocol implementations are now bridged to Python.
+Previously the C extension exposed only HTTP + WebSocket, so TCP/UDP/MQTT/Database
+`Engine` methods raised `AttributeError` whenever the C engine was active.
 
-**Missing bindings** (C implementations exist but are not exposed to Python):
+Now exposed (in addition to `execute_request`, `start_load_test`, `get_metrics`,
+`reset_metrics`, and the WebSocket methods):
 - `tcp_connect`, `tcp_send`, `tcp_receive`, `tcp_disconnect`
 - `udp_create_endpoint`, `udp_send`, `udp_receive`, `udp_close_endpoint`
 - `mqtt_connect`, `mqtt_publish`, `mqtt_subscribe`, `mqtt_unsubscribe`, `mqtt_disconnect`
 - `database_connect`, `database_query`, `database_disconnect`
+- `reset_connection_pools` (test isolation)
 
-**Impact:** The Python wrapper `Engine` class delegates protocol calls to `self._engine` (the C extension), which raises `AttributeError` for all protocol methods except WebSocket. Tests for TCP, UDP, MQTT, and Database protocols are currently **skipped** with clear skip messages identifying this gap.
-
-**Fix:** Add PyMethodDef entries in `python_extension.c` for each missing protocol, following the same pattern as `LoadTestEngine_websocket_connect`. Each needs:
-1. A static C function that parses Python args and calls the engine C function
-2. A `PyMethodDef` entry in the `LoadTestEngine_methods[]` array
+Each has a `PyMethodDef` entry in `LoadTestEngine_methods[]` plus a static wrapper
+that parses args, releases the GIL around blocking I/O, and builds the result dict
+via the `dict_set()` / `safe_str()` helpers. The TCP/UDP/MQTT/Database test suites
+no longer skip on the binding gap.
 
 ### Future Enhancements (not bugs)
 1. Add TLS/SSL support for all protocols
-2. Integrate libwebsockets for real WebSocket protocol support
-3. Add real database driver support (MySQL/PostgreSQL/MongoDB)
+2. ✅ Done — real RFC 6455 WebSocket via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`), simulated fallback where libcurl lacks WS
+3. ✅ Done — real database drivers: PostgreSQL (libpq), MySQL/MariaDB (libmysqlclient), MongoDB (libmongoc), each with a simulated fallback
 4. Pure C unit tests with Unity/CMocka framework
 5. Async Python support (currently handled by C worker threads)
 6. Buffer pooling for high-throughput scenarios
-7. Add missing protocol bindings to python_extension.c (see above)
+7. ✅ Done — all protocol bindings exposed in `python_extension.c` (see above)
+8. First-class parameterized DB queries (`PQexecParams` / prepared statements) to close the V15 injection surface
 
 ---
 

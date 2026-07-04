@@ -1,6 +1,7 @@
 #include "tcp.h"
 #include "../common.h"
 #include "pool_common.h"
+#include "tls_transport.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -107,10 +108,25 @@ static tcp_connection_t* tcp_find_or_reserve_locked(const char* host, int port, 
 }
 
 int tcp_connect(const char* host, int port, const char* conn_id, response_t* response) {
+    return tcp_connect_tls(host, port, conn_id, false, true, response);
+}
+
+int tcp_connect_tls(const char* host, int port, const char* conn_id,
+                    bool use_tls, bool tls_verify, response_t* response) {
     if (!host || port <= 0 || !response) {
         return -1;
     }
     conn_id = effective_conn_id(conn_id);
+
+    if (use_tls && !tls_available()) {
+        memset(response, 0, sizeof(response_t));
+        response->protocol = PROTOCOL_TCP;
+        response->success = false;
+        response->status_code = 501;
+        strcpy(response->error_message,
+               "TLS support not compiled in (OpenSSL not found at build time)");
+        return -1;
+    }
 
     memset(response, 0, sizeof(response_t));
     response->protocol = PROTOCOL_TCP;
@@ -140,6 +156,10 @@ int tcp_connect(const char* host, int port, const char* conn_id, response_t* res
         /* Stale slot: drop the dead fd and fall through to reconnect. The slot
            stays reserved (conn pointer remains valid) and is republished with a
            fresh socket in critical section 2 below. */
+        if (conn->tls) {
+            tls_session_free((tls_session_t*)conn->tls);
+            conn->tls = NULL;
+        }
         if (conn->socket_fd >= 0) close(conn->socket_fd);
         conn->socket_fd = -1;
         conn->is_connected = false;
@@ -215,16 +235,30 @@ int tcp_connect(const char* host, int port, const char* conn_id, response_t* res
     fcntl(fd, F_SETFL, flags); // back to blocking
     freeaddrinfo(res);
 
+    /* TLS handshake happens on the blocking socket, still without the mutex. */
+    tls_session_t* tls = NULL;
+    if (use_tls) {
+        tls = tls_session_create(fd, host, tls_verify,
+                                 response->error_message, sizeof(response->error_message));
+        if (!tls) {
+            close(fd);
+            response->success = false; response->status_code = 495;
+            response->response_time_us = get_time_us() - start_time;
+            return -1;
+        }
+    }
+
     /* --- Critical section 2: publish the live socket into the slot --- */
     pthread_mutex_lock(&tcp_pool_mutex);
     conn->socket_fd = fd;
+    conn->tls = tls;
     conn->is_connected = true;
     pthread_mutex_unlock(&tcp_pool_mutex);
 
     response->success = true;
     response->status_code = 200;
     snprintf(response->body, sizeof(response->body),
-            "TCP connection established to %s:%d", host, port);
+            "%s connection established to %s:%d", use_tls ? "TLS" : "TCP", host, port);
     response->protocol_data.tcp.bytes_sent = 0;
     response->protocol_data.tcp.bytes_received = 0;
     response->response_time_us = get_time_us() - start_time;
@@ -244,6 +278,7 @@ int tcp_send(const char* host, int port, const char* conn_id, const char* data, 
     pthread_mutex_lock(&tcp_pool_mutex);
     tcp_connection_t* conn = tcp_find_locked(host, port, conn_id);
     int fd = (conn && conn->is_connected) ? conn->socket_fd : -1;
+    tls_session_t* tls = (conn && conn->is_connected) ? (tls_session_t*)conn->tls : NULL;
     pthread_mutex_unlock(&tcp_pool_mutex);
 
     if (fd < 0) {
@@ -256,27 +291,39 @@ int tcp_send(const char* host, int port, const char* conn_id, const char* data, 
 
     /* Blocking send loop runs without the pool mutex. data_len is carried from
        the caller so binary payloads with embedded NULs are sent in full. */
-    size_t total_sent = 0;
-    while (total_sent < data_len) {
-        ssize_t bytes_sent = send(fd, data + total_sent, data_len - total_sent, 0);
-        if (bytes_sent < 0) {
+    if (tls) {
+        if (tls_session_send(tls, data, data_len) < 0) {
             pthread_mutex_lock(&tcp_pool_mutex);
             if (conn->socket_fd == fd) conn->is_connected = false;
             pthread_mutex_unlock(&tcp_pool_mutex);
-            snprintf(response->error_message, sizeof(response->error_message),
-                    "Send failed after %zu bytes: %s", total_sent, strerror(errno));
+            strcpy(response->error_message, "TLS send failed");
             response->success = false; response->status_code = 500;
             response->response_time_us = get_time_us() - start_time;
             return -1;
         }
-        total_sent += (size_t)bytes_sent;
+    } else {
+        size_t total_sent = 0;
+        while (total_sent < data_len) {
+            ssize_t bytes_sent = send(fd, data + total_sent, data_len - total_sent, 0);
+            if (bytes_sent < 0) {
+                pthread_mutex_lock(&tcp_pool_mutex);
+                if (conn->socket_fd == fd) conn->is_connected = false;
+                pthread_mutex_unlock(&tcp_pool_mutex);
+                snprintf(response->error_message, sizeof(response->error_message),
+                        "Send failed after %zu bytes: %s", total_sent, strerror(errno));
+                response->success = false; response->status_code = 500;
+                response->response_time_us = get_time_us() - start_time;
+                return -1;
+            }
+            total_sent += (size_t)bytes_sent;
+        }
     }
 
     response->success = true;
     response->status_code = 200;
     snprintf(response->body, sizeof(response->body),
-            "Sent %zu bytes to %s:%d", total_sent, host, port);
-    response->protocol_data.tcp.bytes_sent = total_sent;
+            "Sent %zu bytes to %s:%d", data_len, host, port);
+    response->protocol_data.tcp.bytes_sent = data_len;
     response->response_time_us = get_time_us() - start_time;
     return 0;
 }
@@ -294,6 +341,7 @@ int tcp_receive(const char* host, int port, const char* conn_id, response_t* res
     pthread_mutex_lock(&tcp_pool_mutex);
     tcp_connection_t* conn = tcp_find_locked(host, port, conn_id);
     int fd = (conn && conn->is_connected) ? conn->socket_fd : -1;
+    tls_session_t* tls = (conn && conn->is_connected) ? (tls_session_t*)conn->tls : NULL;
     pthread_mutex_unlock(&tcp_pool_mutex);
 
     if (fd < 0) {
@@ -304,31 +352,40 @@ int tcp_receive(const char* host, int port, const char* conn_id, response_t* res
         return -1;
     }
 
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    /* Wait for readability unless the TLS layer already holds decrypted bytes
+       (data can sit in the SSL buffer with nothing pending on the socket). */
+    if (!(tls && tls_session_pending(tls) > 0)) {
+        fd_set read_fds;
+        struct timeval timeout = {5, 0}; // 5 second timeout per CONTEXT.md
+        FD_ZERO(&read_fds);
+        FD_SET(fd, &read_fds);
+        int select_result = select(fd + 1, &read_fds, NULL, NULL, &timeout);
 
-    fd_set read_fds;
-    struct timeval timeout = {5, 0}; // 5 second timeout per CONTEXT.md
-    FD_ZERO(&read_fds);
-    FD_SET(fd, &read_fds);
-    int select_result = select(fd + 1, &read_fds, NULL, NULL, &timeout);
-
-    if (select_result <= 0) {
-        fcntl(fd, F_SETFL, flags);
-        response->success = true;
-        response->status_code = 204;
-        strcpy(response->body, "No data available");
-        response->response_time_us = get_time_us() - start_time;
-        return 0;
+        if (select_result <= 0) {
+            response->success = true;
+            response->status_code = 204;
+            strcpy(response->body, "No data available");
+            response->response_time_us = get_time_us() - start_time;
+            return 0;
+        }
     }
 
     char buffer[MAX_BODY_LENGTH];
-    ssize_t bytes_received = recv(fd, buffer, sizeof(buffer) - 1, 0);
-    fcntl(fd, F_SETFL, flags);
+    ssize_t bytes_received;
+    if (tls) {
+        /* Socket is readable (or bytes are buffered): SSL_read on the blocking
+           fd returns without stalling. */
+        bytes_received = tls_session_recv(tls, buffer, sizeof(buffer) - 1);
+    } else {
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        bytes_received = recv(fd, buffer, sizeof(buffer) - 1, 0);
+        fcntl(fd, F_SETFL, flags);
+    }
 
     if (bytes_received < 0) {
         snprintf(response->error_message, sizeof(response->error_message),
-                "Receive failed: %s", strerror(errno));
+                "Receive failed: %s", tls ? "TLS read error" : strerror(errno));
         response->success = false; response->status_code = 500;
         response->response_time_us = get_time_us() - start_time;
         return -1;
@@ -338,6 +395,10 @@ int tcp_receive(const char* host, int port, const char* conn_id, response_t* res
         // Peer closed — tear down the slot's socket under the lock.
         pthread_mutex_lock(&tcp_pool_mutex);
         if (conn->socket_fd == fd) {
+            if (conn->tls) {
+                tls_session_free((tls_session_t*)conn->tls);
+                conn->tls = NULL;
+            }
             close(fd);
             conn->socket_fd = -1;
             conn->is_connected = false;
@@ -376,9 +437,12 @@ int tcp_disconnect(const char* host, int port, const char* conn_id, response_t* 
     pthread_mutex_lock(&tcp_pool_mutex);
     tcp_connection_t* conn = tcp_find_locked(host, port, conn_id);
     int fd = -1;
+    tls_session_t* tls = NULL;
     if (conn && conn->is_connected) {
         fd = conn->socket_fd;
+        tls = (tls_session_t*)conn->tls;
         conn->socket_fd = -1;
+        conn->tls = NULL;
         conn->is_connected = false;
     }
     pthread_mutex_unlock(&tcp_pool_mutex);
@@ -391,7 +455,8 @@ int tcp_disconnect(const char* host, int port, const char* conn_id, response_t* 
         return -1;
     }
 
-    // The fd is already detached from the slot; close it without the lock.
+    // The fd/session are already detached from the slot; close without the lock.
+    if (tls) tls_session_free(tls);
     if (shutdown(fd, SHUT_RDWR) < 0) {
         /* already closed / not connected — ignore */
     }
@@ -414,6 +479,10 @@ int tcp_disconnect(const char* host, int port, const char* conn_id, response_t* 
 void tcp_cleanup_all(void) {
     pthread_mutex_lock(&tcp_pool_mutex);
     for (int i = 0; i < tcp_connection_count; i++) {
+        if (tcp_connections[i].tls) {
+            tls_session_free((tls_session_t*)tcp_connections[i].tls);
+            tcp_connections[i].tls = NULL;
+        }
         if (tcp_connections[i].socket_fd >= 0) {
             close(tcp_connections[i].socket_fd);
             tcp_connections[i].socket_fd = -1;

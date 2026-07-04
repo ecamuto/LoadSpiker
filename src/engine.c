@@ -20,11 +20,8 @@ typedef struct {
     size_t capacity;
 } response_buffer_t;
 
-typedef struct {
-    char* data;
-    size_t size;
-    size_t capacity;
-} header_buffer_t;
+#define BODY_BUFFER_INITIAL   (16 * 1024)
+#define HEADER_BUFFER_INITIAL (4 * 1024)
 
 typedef struct worker_thread {
     pthread_t thread;
@@ -54,62 +51,73 @@ struct engine {
     struct timeval test_start_time;  /* wall-clock time when load test started */
 };
 
+/* Append to a growable, always-NUL-terminated buffer. Doubles capacity as
+   needed, hard-capped at HTTP_RESPONSE_BUFFER_MAX. Returns 0 on success,
+   -1 on OOM or cap exceeded (buffer contents stay valid). */
+static int buffer_append(response_buffer_t* buffer, size_t initial_capacity,
+                         const char* contents, size_t total_size) {
+    size_t required_size = buffer->size + total_size + 1; // +1 for null terminator
+    if (required_size < total_size || required_size > HTTP_RESPONSE_BUFFER_MAX) {
+        return -1; // overflow or over the safety cap
+    }
+
+    if (required_size > buffer->capacity) {
+        size_t new_capacity = buffer->capacity ? buffer->capacity : initial_capacity;
+        while (new_capacity < required_size) {
+            new_capacity *= 2;
+        }
+        if (new_capacity > HTTP_RESPONSE_BUFFER_MAX) {
+            new_capacity = HTTP_RESPONSE_BUFFER_MAX;
+        }
+        char* new_data = realloc(buffer->data, new_capacity);
+        if (!new_data) {
+            return -1;
+        }
+        buffer->data = new_data;
+        buffer->capacity = new_capacity;
+    }
+
+    if (total_size > 0) {
+        memcpy(buffer->data + buffer->size, contents, total_size);
+        buffer->size += total_size;
+    }
+    buffer->data[buffer->size] = '\0';
+    return 0;
+}
+
 static size_t write_callback(char* contents, size_t size, size_t nmemb, void* userdata) {
     response_buffer_t* buffer = (response_buffer_t*)userdata;
     size_t total_size = size * nmemb;
 
-    if (!buffer || !buffer->data || !contents) {
+    if (!buffer || !contents) {
         return 0;
     }
-    
-    // Check if we need to expand the buffer or if we're at capacity
-    size_t required_size = buffer->size + total_size + 1; // +1 for null terminator
-    
-    if (required_size > buffer->capacity) {
-        // Truncate to fit remaining capacity
-        size_t available_space = buffer->capacity - buffer->size - 1; // -1 for null terminator
-        if (available_space == 0) {
-            return 0; // Buffer is full
-        }
-        total_size = available_space;
+    if (buffer_append(buffer, BODY_BUFFER_INITIAL, contents, total_size) != 0) {
+        return 0; // abort the transfer (curl reports a write error)
     }
-    
-    if (total_size > 0) {
-        memcpy(buffer->data + buffer->size, contents, total_size);
-        buffer->size += total_size;
-        buffer->data[buffer->size] = '\0'; // Ensure null termination
-    }
-    
     return total_size;
 }
 
 static size_t header_callback(char* contents, size_t size, size_t nmemb, void* userdata) {
-    header_buffer_t* buffer = (header_buffer_t*)userdata;
+    response_buffer_t* buffer = (response_buffer_t*)userdata;
     size_t total_size = size * nmemb;
 
-    if (!buffer || !buffer->data || !contents) {
+    if (!buffer || !contents) {
         return 0;
     }
-    
-    // Check if we need to expand the buffer or if we're at capacity
-    size_t required_size = buffer->size + total_size + 1; // +1 for null terminator
-    
-    if (required_size > buffer->capacity) {
-        // Truncate to fit remaining capacity
-        size_t available_space = buffer->capacity - buffer->size - 1; // -1 for null terminator
-        if (available_space == 0) {
-            return total_size; // Still report success to cURL, but don't store
-        }
-        total_size = available_space;
-    }
-    
-    if (total_size > 0) {
-        memcpy(buffer->data + buffer->size, contents, total_size);
-        buffer->size += total_size;
-        buffer->data[buffer->size] = '\0'; // Ensure null termination
-    }
-    
-    return size * nmemb; // Always return the original size to cURL
+    /* Header storage failure (OOM/cap) drops the header block but does not
+       abort the transfer: always report success to cURL. */
+    (void)buffer_append(buffer, HEADER_BUFFER_INITIAL, contents, total_size);
+    return total_size;
+}
+
+void http_response_free(http_response_t* response) {
+    if (!response) return;
+    free(response->headers);
+    free(response->body);
+    response->headers = NULL;
+    response->body = NULL;
+    response->body_len = 0;
 }
 
 // Removed static get_time_us as it conflicts with mqtt.h declaration
@@ -155,13 +163,21 @@ int engine_convert_http_request(const http_request_t* http_req, request_t* gener
 }
 
 // MQTT Engine wrapper functions
-int engine_mqtt_connect(engine_t* engine, const char* broker_host, int broker_port, 
-                       const char* client_id, const char* username, const char* password, 
+int engine_mqtt_connect(engine_t* engine, const char* broker_host, int broker_port,
+                       const char* client_id, const char* username, const char* password,
                        int keep_alive, response_t* response) {
+    return engine_mqtt_connect_tls(engine, broker_host, broker_port, client_id,
+                                   username, password, keep_alive, false, true, response);
+}
+
+int engine_mqtt_connect_tls(engine_t* engine, const char* broker_host, int broker_port,
+                            const char* client_id, const char* username, const char* password,
+                            int keep_alive, bool use_tls, bool tls_verify, response_t* response) {
     if (!engine || !broker_host || !client_id || !response) return -1;
-    
+
     uint64_t start_time = get_time_us();
-    int result = mqtt_connect(broker_host, broker_port, client_id, username, password, keep_alive, response);
+    int result = mqtt_connect_tls(broker_host, broker_port, client_id, username, password,
+                                  keep_alive, use_tls, tls_verify, response);
     uint64_t end_time = get_time_us();
     
     // Set protocol and timing information
@@ -299,18 +315,23 @@ int engine_database_disconnect(engine_t* engine, const char* connection_string, 
 
 int engine_convert_http_response(const response_t* generic_resp, http_response_t* http_resp) {
     if (!generic_resp || !http_resp) return -1;
-    
+
     memset(http_resp, 0, sizeof(http_response_t));
-    
+
     http_resp->status_code = generic_resp->status_code;
-    /* snprintf for the same reason as engine_convert_http_request: guaranteed
-       termination, no gcc -Wstringop-truncation on these same-sized copies. */
-    snprintf(http_resp->headers, sizeof(http_resp->headers), "%s", generic_resp->headers);
-    snprintf(http_resp->body, sizeof(http_resp->body), "%s", generic_resp->body);
+    /* http_response_t owns heap copies now; caller releases with
+       http_response_free(). */
+    http_resp->headers = strdup(generic_resp->headers);
+    http_resp->body = strdup(generic_resp->body);
+    if (!http_resp->headers || !http_resp->body) {
+        http_response_free(http_resp);
+        return -1;
+    }
+    http_resp->body_len = strlen(http_resp->body);
     http_resp->response_time_us = generic_resp->response_time_us;
     http_resp->success = generic_resp->success;
     snprintf(http_resp->error_message, sizeof(http_resp->error_message), "%s", generic_resp->error_message);
-    
+
     return 0;
 }
 
@@ -349,7 +370,10 @@ static void update_metrics(engine_t* engine, uint64_t response_time_us, bool suc
 /* Perform a single HTTP request with libcurl and fill `response` completely.
    Shared by the synchronous path and both worker pools to avoid triplicating
    the curl setup/teardown. On any setup failure the response is marked
-   unsuccessful with an explanatory error_message. */
+   unsuccessful with an explanatory error_message.
+   The response owns its heap body/headers; callers must release them with
+   http_response_free(). Buffers grow to the actual response size (see
+   buffer_append), so bodies are no longer truncated at MAX_BODY_LENGTH. */
 static void http_execute(const http_request_t* request, http_response_t* response) {
     memset(response, 0, sizeof(http_response_t));
 
@@ -360,28 +384,9 @@ static void http_execute(const http_request_t* request, http_response_t* respons
         return;
     }
 
+    /* Grown lazily by the callbacks; ownership moves into the response below. */
     response_buffer_t buffer = {0};
-    buffer.data = malloc(MAX_BODY_LENGTH);
-    if (!buffer.data) {
-        curl_easy_cleanup(curl);
-        strncpy(response->error_message, "Out of memory (body buffer)",
-                sizeof(response->error_message) - 1);
-        return;
-    }
-    buffer.capacity = MAX_BODY_LENGTH;
-    buffer.data[0] = '\0';
-
-    header_buffer_t headers = {0};
-    headers.data = malloc(MAX_HEADER_LENGTH);
-    if (!headers.data) {
-        free(buffer.data);
-        curl_easy_cleanup(curl);
-        strncpy(response->error_message, "Out of memory (header buffer)",
-                sizeof(response->error_message) - 1);
-        return;
-    }
-    headers.capacity = MAX_HEADER_LENGTH;
-    headers.data[0] = '\0';
+    response_buffer_t headers = {0};
 
     uint64_t start_time = get_time_us();
 
@@ -424,31 +429,25 @@ static void http_execute(const http_request_t* request, http_response_t* respons
     response->response_time_us = response_time;
     response->success = (res == CURLE_OK && response_code >= 200 && response_code < 400);
 
-    if (buffer.size > 0) {
-        size_t copy_size = (buffer.size < MAX_BODY_LENGTH - 1) ? buffer.size : MAX_BODY_LENGTH - 1;
-        memcpy(response->body, buffer.data, copy_size);
-        response->body[copy_size] = '\0';
-    } else {
-        response->body[0] = '\0';
-    }
-
-    if (headers.size > 0) {
-        size_t copy_size = (headers.size < MAX_HEADER_LENGTH - 1) ? headers.size : MAX_HEADER_LENGTH - 1;
-        memcpy(response->headers, headers.data, copy_size);
-        response->headers[copy_size] = '\0';
-    } else {
-        response->headers[0] = '\0';
-    }
+    /* Transfer buffer ownership into the response (NULL when nothing arrived;
+       consumers treat NULL as empty). */
+    response->body = buffer.data;
+    response->body_len = buffer.size;
+    response->headers = headers.data;
 
     if (res != CURLE_OK) {
-        strncpy(response->error_message, curl_easy_strerror(res), sizeof(response->error_message) - 1);
-        response->error_message[sizeof(response->error_message) - 1] = '\0';
+        if (res == CURLE_WRITE_ERROR) {
+            snprintf(response->error_message, sizeof(response->error_message),
+                     "Response exceeded %lu MiB buffer cap (or out of memory)",
+                     (unsigned long)(HTTP_RESPONSE_BUFFER_MAX / (1024 * 1024)));
+        } else {
+            strncpy(response->error_message, curl_easy_strerror(res), sizeof(response->error_message) - 1);
+            response->error_message[sizeof(response->error_message) - 1] = '\0';
+        }
     }
 
     if (header_list) curl_slist_free_all(header_list);
     curl_easy_cleanup(curl);
-    free(buffer.data);
-    free(headers.data);
 }
 
 static void* worker_thread_func(void* arg) {
@@ -479,6 +478,7 @@ static void* worker_thread_func(void* arg) {
         http_response_t response;
         http_execute(&request, &response);
         update_metrics(engine, response.response_time_us, response.success);
+        http_response_free(&response);
     }
 
     return NULL;
@@ -725,6 +725,7 @@ static void* sustained_worker_func(void* arg) {
         http_response_t response;
         http_execute(&request, &response);
         update_metrics(engine, response.response_time_us, response.success);
+        http_response_free(&response);
     }
 
     return NULL;

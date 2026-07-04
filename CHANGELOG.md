@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced memory safety in C engine core
 - **Real RFC 6455 WebSocket** via libcurl's WebSocket API (`HAVE_CURL_WEBSOCKETS`), GIL released during I/O; simulated fallback where libcurl lacks WS
 - **Real PostgreSQL** via libpq (`HAVE_LIBPQ`), **real MySQL/MariaDB** via libmysqlclient (`HAVE_MYSQL`), and **real MongoDB** via libmongoc (`HAVE_MONGOC`, query string is a JSON command document); per-user DB isolation via `conn_id`; each backend degrades to a simulated path when its client lib is absent
+- **TLS for TCP and MQTT** via a shared OpenSSL transport (`src/protocols/tls_transport.c`, gated by `HAVE_OPENSSL`): `tcp_connect(..., use_tls=True, tls_verify=...)` and `mqtt_connect(..., use_tls=True, tls_verify=...)` (mqtts); TLS 1.2+, SNI, platform CA store, hostname verification; builds without OpenSSL fail TLS requests with an explicit error instead of degrading silently
+- **Dynamic HTTP response buffers**: response bodies/headers grow to the actual response size (previously truncated at 64 KiB / 8 KiB), with a 256 MiB per-response safety cap; `http_response_t` now owns heap buffers released via `http_response_free()`
 - C-core ramp-up (`ramp_up_seconds`) with a duration-sustained load model (replaces the Python burst loop)
 - AddressSanitizer harness for the MQTT encoders (`make test-asan`, `tests/asan_check.c`)
 - Security regression tests (`tests/test_security_regressions.py`) and a GitHub Actions CI workflow
@@ -38,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uninitialized memory access in response buffers
 - Thread safety issues in worker queue management
 - MQTT packet-encoder stack overflows (over-length CONNECT/PUBLISH/SUBSCRIBE now rejected); CONNACK/SUBACK read-to-length validation
+- Double-unlock of the MQTT pool mutex on the successful `mqtt_connect` path (undefined behavior)
 - Binary/NUL-safe TCP/UDP sends (length carried instead of `strlen`)
 - Per-protocol pool concurrency: mutex narrowed to the slot lookup, blocking I/O outside the lock; per-user TCP/UDP/Database isolation
 - Python-layer audit: opt-in CSV type coercion, OAuth2 `state` validation, Bearer token redaction, HTMLReporter `</script>` escaping, CLI config key validation

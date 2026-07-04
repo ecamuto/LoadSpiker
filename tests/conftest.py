@@ -64,6 +64,48 @@ def engine_large():
 
 
 # ---------------------------------------------------------------------------
+# Mock HTTP Server
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_http_server():
+    """Local HTTP server. GET /bytes/<n> returns an n-byte deterministic body
+    (repeating 'a'..'z'), so tests can exercise arbitrarily large responses
+    without the network."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.startswith('/bytes/'):
+                try:
+                    n = int(self.path.rsplit('/', 1)[1])
+                except ValueError:
+                    self.send_error(400)
+                    return
+                body = bytes((97 + i % 26) for i in range(n))
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/octet-stream')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(200)
+                self.send_header('Content-Length', '2')
+                self.end_headers()
+                self.wfile.write(b'ok')
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(('localhost', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield 'localhost', server.server_address[1]
+    server.shutdown()
+    thread.join(timeout=5)
+
+
+# ---------------------------------------------------------------------------
 # Mock TCP Server
 # ---------------------------------------------------------------------------
 

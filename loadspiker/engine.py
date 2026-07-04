@@ -292,6 +292,27 @@ class _PythonEngine:
                 'error_message': str(e)
             }
     
+    def get_capabilities(self) -> Dict[str, Any]:
+        """Report what this fallback engine actually does per protocol.
+
+        HTTP (requests), TCP and UDP (socket) are real; MQTT is simulated;
+        WebSocket and database operations are not implemented. TLS is True
+        because tcp_connect() supports ssl-wrapped connections.
+        """
+        return {
+            'http': 'real',
+            'tcp': 'real',
+            'udp': 'real',
+            'mqtt': 'simulated',
+            'websocket': 'not_implemented',
+            'database': {
+                'postgresql': 'not_implemented',
+                'mysql': 'not_implemented',
+                'mongodb': 'not_implemented',
+            },
+            'tls': True,
+        }
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get current metrics"""
         return self._metrics.copy()
@@ -347,20 +368,29 @@ class _PythonEngine:
         }
     
     # TCP Socket Python fallback methods
-    def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000, conn_id: str = "default") -> Dict[str, Any]:
-        """Python fallback for TCP connections using socket library"""
+    def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000, conn_id: str = "default",
+                    use_tls: bool = False, tls_verify: bool = True) -> Dict[str, Any]:
+        """Python fallback for TCP connections using socket library (+ ssl for TLS)"""
         try:
             import socket
             import time
-            
+
             start_time = time.time()
-            
+
             # Create TCP socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout_ms / 1000.0)
-            
+
             # Connect to server
             sock.connect((hostname, port))
+
+            if use_tls:
+                import ssl
+                ctx = ssl.create_default_context()
+                if not tls_verify:
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
+                sock = ctx.wrap_socket(sock, server_hostname=hostname)
             
             end_time = time.time()
             response_time_ms = (end_time - start_time) * 1000
@@ -795,7 +825,8 @@ class _PythonEngine:
             }
     
     # MQTT Python fallback methods
-    def mqtt_connect(self, broker_host: str, broker_port: int, client_id: str, username: str, password: str, keep_alive: int) -> Dict[str, Any]:
+    def mqtt_connect(self, broker_host: str, broker_port: int, client_id: str, username: str, password: str, keep_alive: int,
+                     use_tls: bool = False, tls_verify: bool = True) -> Dict[str, Any]:
         """Python fallback for MQTT connections using paho-mqtt library"""
         try:
             import time
@@ -1180,6 +1211,18 @@ class Engine:
             op["client_id"] = f"{base}_u{user_id}"
         return op
 
+    def capabilities(self) -> Dict[str, Any]:
+        """Report the engine's per-protocol capabilities at runtime.
+
+        Returns a dict describing whether each protocol is "real" (actually
+        talks to a server), "simulated" (synthetic responses — no server is
+        contacted), or "not_implemented", plus a "tls" bool. For the C engine
+        this reflects the compile-time feature macros (HAVE_CURL_WEBSOCKETS,
+        HAVE_LIBPQ, HAVE_MYSQL, HAVE_MONGOC, HAVE_OPENSSL); simulated paths
+        also emit a one-time stderr warning when first exercised.
+        """
+        return self._engine.get_capabilities()
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get current performance metrics"""
         return self._engine.get_metrics()
@@ -1335,7 +1378,8 @@ class Engine:
     
     # Phase 1: TCP Socket Support - TCP Methods
     def tcp_connect(self, hostname: str, port: int, timeout_ms: int = 30000,
-                    conn_id: str = "default") -> Dict[str, Any]:
+                    conn_id: str = "default", use_tls: bool = False,
+                    tls_verify: bool = True) -> Dict[str, Any]:
         """
         Connect to a TCP server
 
@@ -1345,11 +1389,16 @@ class Engine:
             timeout_ms: Connection timeout in milliseconds
             conn_id: Connection identity (one per virtual user) so concurrent
                 users targeting the same host:port get isolated sockets
+            use_tls: Wrap the connection in TLS (requires an OpenSSL build;
+                fails with a clear error otherwise)
+            tls_verify: Verify the server certificate and hostname; set False
+                for self-signed test endpoints
 
         Returns:
             Dictionary containing connection response data
         """
-        return self._engine.tcp_connect(hostname=hostname, port=port, timeout_ms=timeout_ms, conn_id=conn_id)
+        return self._engine.tcp_connect(hostname=hostname, port=port, timeout_ms=timeout_ms, conn_id=conn_id,
+                                        use_tls=use_tls, tls_verify=tls_verify)
 
     def tcp_send(self, hostname: str, port: int, data: str, timeout_ms: int = 30000,
                  conn_id: str = "default") -> Dict[str, Any]:
@@ -1461,19 +1510,24 @@ class Engine:
         return self._engine.udp_close_endpoint(hostname=hostname, port=port, conn_id=conn_id)
     
     # Phase 2: Message Queue Protocol Support - MQTT Methods
-    def mqtt_connect(self, broker_host: str, broker_port: int = 1883, 
-                    client_id: str = "loadspiker_client", username: str = None, 
-                    password: str = None, keep_alive: int = 60) -> Dict[str, Any]:
+    def mqtt_connect(self, broker_host: str, broker_port: int = 1883,
+                    client_id: str = "loadspiker_client", username: str = None,
+                    password: str = None, keep_alive: int = 60,
+                    use_tls: bool = False, tls_verify: bool = True) -> Dict[str, Any]:
         """
         Connect to an MQTT broker
 
         Args:
             broker_host: MQTT broker hostname or IP address
-            broker_port: MQTT broker port (default: 1883)
+            broker_port: MQTT broker port (default: 1883; mqtts is conventionally 8883)
             client_id: MQTT client identifier
             username: Optional username for authentication
             password: Optional password for authentication
             keep_alive: Keep alive interval in seconds
+            use_tls: Wrap the connection in TLS / mqtts (requires an OpenSSL
+                build; fails with a clear error otherwise)
+            tls_verify: Verify the broker certificate and hostname; set False
+                for self-signed test brokers
 
         Returns:
             Dictionary containing connection response data
@@ -1484,7 +1538,9 @@ class Engine:
             client_id=client_id,
             username=username or "",
             password=password or "",
-            keep_alive=keep_alive
+            keep_alive=keep_alive,
+            use_tls=use_tls,
+            tls_verify=tls_verify
         )
     
     def mqtt_publish(self, broker_host: str, broker_port: int = 1883,

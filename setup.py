@@ -274,6 +274,42 @@ def get_mongoc_flags():
     return [], []
 
 
+def get_openssl_flags():
+    """Return (cflags, libs) for OpenSSL, or ([], []) if absent.
+
+    Enables real TLS for the TCP and MQTT protocol modules. Tries pkg-config
+    (preferring Homebrew's keg-only openssl@3 pkgconfig dir), then falls back
+    to the Homebrew prefix directly.
+    """
+    prefix = os.environ.get('HOMEBREW_PREFIX', '/opt/homebrew')
+    pkg_dir = os.path.join(prefix, 'opt', 'openssl@3', 'lib', 'pkgconfig')
+    env = dict(os.environ)
+    if os.path.isdir(pkg_dir):
+        existing = env.get('PKG_CONFIG_PATH', '')
+        env['PKG_CONFIG_PATH'] = pkg_dir + (os.pathsep + existing if existing else '')
+    try:
+        cflags = subprocess.check_output(
+            ['pkg-config', '--cflags', 'openssl'], stderr=subprocess.DEVNULL, env=env
+        ).decode().strip().split()
+        libs = subprocess.check_output(
+            ['pkg-config', '--libs', 'openssl'], stderr=subprocess.DEVNULL, env=env
+        ).decode().strip().split()
+        if VERBOSE_MODE:
+            print("📦 OpenSSL via pkg-config")
+        return cflags, libs
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    ssl_prefix = os.path.join(prefix, 'opt', 'openssl@3')
+    if os.path.exists(os.path.join(ssl_prefix, 'include', 'openssl', 'ssl.h')):
+        if VERBOSE_MODE:
+            print(f"📦 OpenSSL via Homebrew prefix {ssl_prefix}")
+        return ([f'-I{ssl_prefix}/include'],
+                [f'-L{ssl_prefix}/lib', '-lssl', '-lcrypto'])
+    if VERBOSE_MODE:
+        print("ℹ️  OpenSSL not found — TCP/MQTT TLS support disabled")
+    return [], []
+
+
 # =============================================================================
 # Compiler Configuration
 # =============================================================================
@@ -287,6 +323,9 @@ libpq_include_dirs, libpq_libs = get_libpq_flags()
 # Get MySQL / MongoDB client flags (optional — enable real backends when present)
 mysql_cflags, mysql_libs = get_mysql_flags()
 mongoc_cflags, mongoc_libs = get_mongoc_flags()
+
+# Get OpenSSL flags (optional — enables real TLS for TCP/MQTT when present)
+openssl_cflags, openssl_libs = get_openssl_flags()
 
 # Warning flags - catch common bugs at compile time
 WARNING_FLAGS = [
@@ -315,13 +354,15 @@ extra_compile_args = (
     curl_cflags +
     mysql_cflags +
     mongoc_cflags +
+    openssl_cflags +
     OPTIMIZATION_FLAGS +
     WARNING_FLAGS +
     ['-pthread', '-std=c11']
 )
 
 # Combine all link arguments
-extra_link_args = curl_libs + libpq_libs + mysql_libs + mongoc_libs + LINK_FLAGS + ['-pthread']
+extra_link_args = (curl_libs + libpq_libs + mysql_libs + mongoc_libs +
+                   openssl_libs + LINK_FLAGS + ['-pthread'])
 
 # Feature macros consumed by the C sources via #ifdef
 feature_macros = [('_GNU_SOURCE', None)]
@@ -333,6 +374,8 @@ if mysql_libs:
     feature_macros.append(('HAVE_MYSQL', '1'))
 if mongoc_libs:
     feature_macros.append(('HAVE_MONGOC', '1'))
+if openssl_libs:
+    feature_macros.append(('HAVE_OPENSSL', '1'))
 
 if VERBOSE_MODE:
     print(f"🔧 Compile flags: {' '.join(extra_compile_args)}")
@@ -349,10 +392,11 @@ loadspiker_c_extension = Extension(
         'src/python_extension.c',
         'src/engine.c',
         'src/protocols/tcp.c',
-        'src/protocols/udp.c', 
+        'src/protocols/udp.c',
         'src/protocols/mqtt.c',
         'src/protocols/database.c',
-        'src/protocols/websocket.c'
+        'src/protocols/websocket.c',
+        'src/protocols/tls_transport.c'
     ],
     include_dirs=['src', 'src/protocols'] + libpq_include_dirs,
     extra_compile_args=extra_compile_args,

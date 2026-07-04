@@ -254,10 +254,13 @@ threads = [threading.Thread(target=run_in_thread, args=(s,)) for s in scenarios]
       <h3>AttributeError for TCP / UDP / MQTT / Database</h3>
       <pre><code class="language-bash">AttributeError: '_loadspiker.LoadSpikerEngine' object has no attribute 'tcp_connect'</code></pre>
 
-      <p>This error means the C extension does not yet expose Python bindings for the requested protocol. The C implementation files (<code>tcp.c</code>, <code>udp.c</code>, <code>mqtt.c</code>, <code>database.c</code>) exist and compile correctly, but the <code>PyMethodDef</code> entries have not yet been added to <code>python_extension.c</code>.</p>
+      <p>All protocol bindings (TCP, UDP, MQTT, Database, WebSocket) are exposed in <code>python_extension.c</code>, so this error now means you are importing a <strong>stale compiled extension</strong> built before the bindings were added — not a missing feature. Rebuild in place for your interpreter and remove leftover <code>.so</code> files:</p>
+      <pre><code class="language-bash">python3 setup.py build_ext --inplace --force
+# remove stale copies if imports still look old
+rm -f loadspiker/loadspiker_c*.so *.so</code></pre>
 
-      <div class="callout warn">
-        <strong>Test suite skip markers:</strong> Tests for these protocols are decorated with <code>@pytest.mark.skipif</code> so the test suite passes even when the bindings are absent. This is intentional and expected behavior, not a test failure. See <a href="architecture.html#python-extension">Architecture: Python C Extension</a> for the full list of exposed methods.
+      <div class="callout info">
+        <strong>Which engine am I on?</strong> Importing <code>loadspiker</code> reports whether the C extension or the pure-Python fallback loaded. The fallback implements HTTP/TCP/UDP; MQTT/WebSocket/Database are C-engine only. See <a href="architecture.html#python-extension">Architecture: Python C Extension</a> for the full list of exposed methods.
       </div>
 
       <p>Check availability at runtime:</p>

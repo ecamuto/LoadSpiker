@@ -31,14 +31,18 @@ static int dict_set(PyObject* dict, const char* key, PyObject* value) {
 
 /* Build a Python str from a C string without ever raising on invalid UTF-8
  * (protocol bodies may carry arbitrary bytes). Invalid sequences are replaced. */
-static PyObject* safe_str(const char* s) {
+static PyObject* safe_str_len(const char* s, size_t len) {
     if (!s) return PyUnicode_FromString("");
-    PyObject* o = PyUnicode_DecodeUTF8(s, (Py_ssize_t)strlen(s), "replace");
+    PyObject* o = PyUnicode_DecodeUTF8(s, (Py_ssize_t)len, "replace");
     if (!o) {
         PyErr_Clear();
         o = PyUnicode_FromString("");
     }
     return o;
+}
+
+static PyObject* safe_str(const char* s) {
+    return safe_str_len(s, s ? strlen(s) : 0);
 }
 
 /* Build the common response dictionary shared by every protocol method. */
@@ -119,19 +123,24 @@ static PyObject* LoadTestEngine_execute_request(LoadTestEngineObject* self, PyOb
     Py_END_ALLOW_THREADS
 
     if (result != 0) {
+        http_response_free(&response);
         PyErr_SetString(PyExc_RuntimeError, "Failed to execute request");
         return NULL;
     }
 
     PyObject* response_dict = PyDict_New();
-    if (!response_dict) return NULL;
+    if (!response_dict) {
+        http_response_free(&response);
+        return NULL;
+    }
     dict_set(response_dict, "status_code", PyLong_FromLong(response.status_code));
     dict_set(response_dict, "headers", safe_str(response.headers));
-    dict_set(response_dict, "body", safe_str(response.body));
+    dict_set(response_dict, "body", safe_str_len(response.body, response.body_len));
     dict_set(response_dict, "response_time_us", PyLong_FromUnsignedLongLong(response.response_time_us));
     dict_set(response_dict, "response_time_ms", PyFloat_FromDouble(response.response_time_us / 1000.0));
     dict_set(response_dict, "success", PyBool_FromLong(response.success));
     dict_set(response_dict, "error_message", safe_str(response.error_message));
+    http_response_free(&response);
 
     return response_dict;
 }
@@ -364,15 +373,18 @@ static PyObject* LoadTestEngine_tcp_connect(LoadTestEngineObject* self, PyObject
     int port;
     int timeout_ms = 30000;
     const char* conn_id = "default";
-    static char* kwlist[] = {"hostname", "port", "timeout_ms", "conn_id", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|is", kwlist, &hostname, &port, &timeout_ms, &conn_id)) {
+    int use_tls = 0;
+    int tls_verify = 1;
+    static char* kwlist[] = {"hostname", "port", "timeout_ms", "conn_id", "use_tls", "tls_verify", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "si|ispp", kwlist, &hostname, &port, &timeout_ms, &conn_id,
+                                     &use_tls, &tls_verify)) {
         return NULL;
     }
     (void)timeout_ms; /* tcp.c uses a fixed select() timeout */
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    tcp_connect(hostname, port, conn_id, &response);
+    tcp_connect_tls(hostname, port, conn_id, use_tls ? true : false, tls_verify ? true : false, &response);
     Py_END_ALLOW_THREADS
     engine_record_metrics(self->engine, response.response_time_us, response.success);
 
@@ -559,15 +571,20 @@ static PyObject* LoadTestEngine_mqtt_connect(LoadTestEngineObject* self, PyObjec
     const char* username = "";
     const char* password = "";
     int keep_alive = 60;
-    static char* kwlist[] = {"broker_host", "broker_port", "client_id", "username", "password", "keep_alive", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|isssi", kwlist,
-                                     &broker_host, &broker_port, &client_id, &username, &password, &keep_alive)) {
+    int use_tls = 0;
+    int tls_verify = 1;
+    static char* kwlist[] = {"broker_host", "broker_port", "client_id", "username", "password", "keep_alive",
+                             "use_tls", "tls_verify", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|isssipp", kwlist,
+                                     &broker_host, &broker_port, &client_id, &username, &password, &keep_alive,
+                                     &use_tls, &tls_verify)) {
         return NULL;
     }
 
     response_t response;
     Py_BEGIN_ALLOW_THREADS
-    engine_mqtt_connect(self->engine, broker_host, broker_port, client_id, username, password, keep_alive, &response);
+    engine_mqtt_connect_tls(self->engine, broker_host, broker_port, client_id, username, password, keep_alive,
+                            use_tls ? true : false, tls_verify ? true : false, &response);
     Py_END_ALLOW_THREADS
 
     return build_response_dict(&response);
@@ -764,6 +781,55 @@ static PyObject* LoadTestEngine_reset_connection_pools(LoadTestEngineObject* sel
     Py_RETURN_NONE;
 }
 
+/* Report the compiled protocol capabilities so callers can tell at runtime
+   which protocols are real and which degrade to simulation. Values mirror the
+   HAVE_* feature macros set by setup.py at build time. */
+static PyObject* LoadTestEngine_get_capabilities(LoadTestEngineObject* self, PyObject* Py_UNUSED(ignored)) {
+    (void)self;
+    PyObject* caps = PyDict_New();
+    if (!caps) return NULL;
+    PyObject* db = PyDict_New();
+    if (!db) {
+        Py_DECREF(caps);
+        return NULL;
+    }
+
+    dict_set(caps, "http", PyUnicode_FromString("real"));
+    dict_set(caps, "tcp", PyUnicode_FromString("real"));
+    dict_set(caps, "udp", PyUnicode_FromString("real"));
+    dict_set(caps, "mqtt", PyUnicode_FromString("real"));
+#ifdef HAVE_CURL_WEBSOCKETS
+    dict_set(caps, "websocket", PyUnicode_FromString("real"));
+#else
+    dict_set(caps, "websocket", PyUnicode_FromString("simulated"));
+#endif
+
+#ifdef HAVE_LIBPQ
+    dict_set(db, "postgresql", PyUnicode_FromString("real"));
+#else
+    dict_set(db, "postgresql", PyUnicode_FromString("simulated"));
+#endif
+#ifdef HAVE_MYSQL
+    dict_set(db, "mysql", PyUnicode_FromString("real"));
+#else
+    dict_set(db, "mysql", PyUnicode_FromString("simulated"));
+#endif
+#ifdef HAVE_MONGOC
+    dict_set(db, "mongodb", PyUnicode_FromString("real"));
+#else
+    dict_set(db, "mongodb", PyUnicode_FromString("simulated"));
+#endif
+    dict_set(caps, "database", db); /* dict_set releases our ref to db */
+
+#ifdef HAVE_OPENSSL
+    dict_set(caps, "tls", PyBool_FromLong(1));
+#else
+    dict_set(caps, "tls", PyBool_FromLong(0));
+#endif
+
+    return caps;
+}
+
 static PyMethodDef LoadTestEngine_methods[] = {
     {"execute_request", KW_METH(LoadTestEngine_execute_request), "Execute a single HTTP request"},
     {"start_load_test", KW_METH(LoadTestEngine_start_load_test), "Start a load test with multiple requests"},
@@ -789,6 +855,7 @@ static PyMethodDef LoadTestEngine_methods[] = {
     {"database_query", KW_METH(LoadTestEngine_database_query), "Execute a database query"},
     {"database_disconnect", KW_METH(LoadTestEngine_database_disconnect), "Disconnect from a database"},
     {"reset_connection_pools", (PyCFunction)LoadTestEngine_reset_connection_pools, METH_NOARGS, "Reset all process-global protocol connection pools"},
+    {"get_capabilities", (PyCFunction)LoadTestEngine_get_capabilities, METH_NOARGS, "Report compiled protocol capabilities (real vs simulated)"},
     {NULL, NULL, 0, NULL}
 };
 

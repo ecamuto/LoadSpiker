@@ -39,18 +39,25 @@ or a **pure-Python fallback**. What each protocol actually does today:
 
 | Protocol | C engine | Python fallback | Notes |
 | -------- | -------- | --------------- | ----- |
-| HTTP/HTTPS | ✅ real (libcurl) | ✅ real (`requests`) | Full request queue + worker pool in C. |
-| TCP | ✅ real sockets | ✅ real sockets | Connection pool; binary payloads with embedded NULs send in full. |
+| HTTP/HTTPS | ✅ real (libcurl) | ✅ real (`requests`) | Full request queue + worker pool in C. Response bodies grow dynamically (no 64 KiB cap; 256 MiB safety limit). |
+| TCP | ✅ real sockets, TLS optional | ✅ real sockets, TLS optional | Connection pool; binary payloads with embedded NULs send in full. `use_tls=True` wraps the socket in TLS (OpenSSL build, `HAVE_OPENSSL`); `tls_verify=False` for self-signed. |
 | UDP | ✅ real sockets | ✅ real sockets | Endpoint pool. |
-| MQTT | ✅ real MQTT 3.1.1 over TCP | ⚠️ simulated | Hand-rolled CONNECT/PUBLISH/SUBSCRIBE packets. |
+| MQTT | ✅ real MQTT 3.1.1 over TCP or TLS | ⚠️ simulated | Hand-rolled CONNECT/PUBLISH/SUBSCRIBE packets. `use_tls=True` gives mqtts (conventionally port 8883), gated by `HAVE_OPENSSL`. |
 | WebSocket | ✅ real RFC 6455 (libcurl WS) / ⚠️ simulated fallback | ⚠️ not implemented | Real frames via libcurl's WebSocket API when built with `HAVE_CURL_WEBSOCKETS`; simulated where libcurl lacks WS support. |
 | Database | ✅ real PostgreSQL (libpq) / MySQL (libmysqlclient) / MongoDB (libmongoc), each with ⚠️ simulated fallback | ⚠️ not implemented | Real connect/query when built with `HAVE_LIBPQ` / `HAVE_MYSQL` / `HAVE_MONGOC`; falls back to simulation when a client lib is absent. MongoDB query string is a JSON command document. |
 
 > Where a protocol falls back to simulation it returns realistic-looking
 > responses and timings so you can build and validate scenarios, but it does not
 > talk to a real server. The build degrades gracefully: `setup.py` probes
-> `curl-config`/`pg_config` and defines `HAVE_CURL_WEBSOCKETS` / `HAVE_LIBPQ`
-> only when those are present.
+> `curl-config`/`pg_config`/OpenSSL and defines `HAVE_CURL_WEBSOCKETS` /
+> `HAVE_LIBPQ` / `HAVE_OPENSSL` only when those are present. TLS is the one
+> feature that never degrades silently: `use_tls=True` on a build without
+> OpenSSL fails with an explicit error.
+> At runtime, `engine.capabilities()` reports the compiled state of every
+> protocol (`"real"` vs `"simulated"`, per database backend, plus a `tls`
+> bool), and any simulated path prints a one-time stderr warning the first
+> time it actually executes — so synthetic numbers can't silently pass for a
+> real load test.
 > Tracked in the [Contributor Guide](docs/CONTRIBUTOR_GUIDE.md#8-known-gaps--refactor-todo).
 
 ## Additional documentation

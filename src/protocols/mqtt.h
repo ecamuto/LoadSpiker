@@ -28,6 +28,7 @@ typedef struct {
     char password[MAX_MQTT_PASSWORD_LENGTH];
     bool is_connected;
     int socket_fd;
+    void* tls;  // tls_session_t* when the connection is TLS-wrapped (mqtts), else NULL
     uint16_t packet_id;
     int keep_alive_seconds;
     char last_error[256];
@@ -59,9 +60,18 @@ typedef struct {
 } mqtt_request_data_t;
 
 // Function declarations
-int mqtt_connect(const char* host, int port, const char* client_id, 
-                const char* username, const char* password, 
+int mqtt_connect(const char* host, int port, const char* client_id,
+                const char* username, const char* password,
                 int keep_alive_seconds, response_t* response);
+
+// TLS variant (MQTT over TLS, conventionally port 8883): use_tls wraps the
+// socket in a TLS handshake before the MQTT CONNECT (requires an OpenSSL
+// build, else fails with a clear error); tls_verify controls certificate/
+// hostname verification (disable for self-signed brokers).
+int mqtt_connect_tls(const char* host, int port, const char* client_id,
+                     const char* username, const char* password,
+                     int keep_alive_seconds, bool use_tls, bool tls_verify,
+                     response_t* response);
 
 int mqtt_publish(const char* host, int port, const char* client_id,
                 const char* topic, const char* message, 

@@ -186,6 +186,33 @@ class TestHTTPRequests:
         assert isinstance(response, dict)
         assert 'status_code' in response
 
+    def test_large_response_body_not_truncated(self, engine, mock_http_server):
+        """Response bodies beyond the old 64 KiB cap arrive in full (V: dynamic buffers)."""
+        host, port = mock_http_server
+        size = 1024 * 1024  # 1 MiB, 16x the old MAX_BODY_LENGTH cap
+        response = engine.execute_request(
+            url=f"http://{host}:{port}/bytes/{size}",
+            method="GET",
+            timeout_ms=30000
+        )
+        assert response['success'] is True
+        assert len(response['body']) == size
+        # Deterministic content: byte i is chr(97 + i % 26)
+        assert response['body'][:4] == 'abcd'
+        assert response['body'][size - 1] == chr(97 + (size - 1) % 26)
+
+    def test_response_body_at_exact_old_cap_boundary(self, engine, mock_http_server):
+        """Bodies straddling the old 65536-byte boundary come through exactly."""
+        host, port = mock_http_server
+        for size in (65535, 65536, 65537):
+            response = engine.execute_request(
+                url=f"http://{host}:{port}/bytes/{size}",
+                method="GET",
+                timeout_ms=30000
+            )
+            assert response['success'] is True
+            assert len(response['body']) == size
+
 
 class TestWebSocketProtocol:
     """Test WebSocket protocol methods via engine (simulated)."""

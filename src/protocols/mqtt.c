@@ -1,5 +1,6 @@
 #include "mqtt.h"
 #include "pool_common.h"
+#include "tls_transport.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -26,18 +27,37 @@ static inline unsigned int get_thread_seed(void) {
 }
 
 /* Read exactly len bytes, looping over short reads so a control packet split
-   across TCP segments is not mistaken for a failure. Returns len on success,
-   -1 on error, or a short count (< len) if the peer closed early. */
-static ssize_t mqtt_recv_full(int fd, void* buf, size_t len) {
+   across TCP segments is not mistaken for a failure. Reads through the TLS
+   session when one is present. Returns len on success, -1 on error, or a
+   short count (< len) if the peer closed early. */
+static ssize_t mqtt_recv_full(tls_session_t* tls, int fd, void* buf, size_t len) {
     size_t total = 0;
     char* p = (char*)buf;
     while (total < len) {
-        ssize_t n = recv(fd, p + total, len - total, 0);
+        ssize_t n = tls ? tls_session_recv(tls, p + total, len - total)
+                        : recv(fd, p + total, len - total, 0);
+        if (n < 0) {
+            if (!tls && errno == EINTR) continue;
+            return -1;
+        }
+        if (n == 0) break; /* peer closed connection */
+        total += (size_t)n;
+    }
+    return (ssize_t)total;
+}
+
+/* Full-length send through the TLS session when present, else the socket. */
+static ssize_t mqtt_io_send(tls_session_t* tls, int fd, const void* buf, size_t len) {
+    if (tls) return tls_session_send(tls, buf, len);
+
+    size_t total = 0;
+    const char* p = (const char*)buf;
+    while (total < len) {
+        ssize_t n = send(fd, p + total, len - total, MSG_NOSIGNAL);
         if (n < 0) {
             if (errno == EINTR) continue;
             return -1;
         }
-        if (n == 0) break; /* peer closed connection */
         total += (size_t)n;
     }
     return (ssize_t)total;
@@ -317,6 +337,14 @@ static mqtt_connection_t* mqtt_find_or_reserve_locked(const char* host, int port
 int mqtt_connect(const char* host, int port, const char* client_id,
                 const char* username, const char* password,
                 int keep_alive_seconds, response_t* response) {
+    return mqtt_connect_tls(host, port, client_id, username, password,
+                            keep_alive_seconds, false, true, response);
+}
+
+int mqtt_connect_tls(const char* host, int port, const char* client_id,
+                     const char* username, const char* password,
+                     int keep_alive_seconds, bool use_tls, bool tls_verify,
+                     response_t* response) {
     if (!host || !client_id || !response) {
         return -1;
     }
@@ -324,6 +352,15 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     memset(response, 0, sizeof(response_t));
     response->protocol = PROTOCOL_MQTT;
     uint64_t start_time = get_time_us();
+
+    if (use_tls && !tls_available()) {
+        response->status_code = 501;
+        response->success = false;
+        strcpy(response->error_message,
+               "TLS support not compiled in (OpenSSL not found at build time)");
+        response->response_time_us = get_time_us() - start_time;
+        return -1;
+    }
 
     /* Bound-check inputs (params only) before building the fixed-size CONNECT
        packet (1024 B). Caps guarantee the builder can never overflow. */
@@ -405,12 +442,27 @@ int mqtt_connect(const char* host, int port, const char* client_id,
 
     freeaddrinfo(res);
 
+    /* TLS handshake before any MQTT bytes (mqtts). Runs without the mutex. */
+    tls_session_t* tls = NULL;
+    if (use_tls) {
+        tls = tls_session_create(fd, host, tls_verify,
+                                 response->error_message, sizeof(response->error_message));
+        if (!tls) {
+            close(fd);
+            response->status_code = 495;
+            response->success = false;
+            response->response_time_us = get_time_us() - start_time;
+            return -1;
+        }
+    }
+
     // Send CONNECT packet
     char connect_packet[1024];
     int packet_len = mqtt_create_connect_packet(connect_packet, client_id,
                                                username, password, keep_alive_seconds);
 
-    if (send(fd, connect_packet, packet_len, 0) < 0) {
+    if (mqtt_io_send(tls, fd, connect_packet, packet_len) < 0) {
+        if (tls) tls_session_free(tls);
         close(fd);
         response->status_code = 500;
         response->success = false;
@@ -422,8 +474,9 @@ int mqtt_connect(const char* host, int port, const char* client_id,
 
     /* Read CONNACK — MQTT 3.1.1 §3.2: fixed 4 bytes: 0x20 0x02 <ack_flags> <return_code> */
     char connack[4];
-    ssize_t connack_len = mqtt_recv_full(fd, connack, sizeof(connack));
+    ssize_t connack_len = mqtt_recv_full(tls, fd, connack, sizeof(connack));
     if (connack_len < 0) {
+        if (tls) tls_session_free(tls);
         close(fd);
         response->status_code = 500;
         response->success = false;
@@ -437,6 +490,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
         (unsigned char)connack[1] != 0x02 ||
         (unsigned char)connack[2] != 0x00 ||
         (unsigned char)connack[3] != 0x00) {
+        if (tls) tls_session_free(tls);
         close(fd);
         response->status_code = 500;
         response->success = false;
@@ -459,6 +513,7 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     /* --- Critical section 2: publish the live socket into the slot --- */
     pthread_mutex_lock(&mqtt_pool_mutex);
     conn->socket_fd = fd;
+    conn->tls = tls;
     conn->is_connected = true;
     conn->keep_alive_seconds = keep_alive_seconds;
     if (username) strncpy(conn->username, username, sizeof(conn->username) - 1);
@@ -485,7 +540,8 @@ int mqtt_connect(const char* host, int port, const char* client_id,
     mqtt_data->qos_level = MQTT_QOS_0;
     mqtt_data->retained = false;
 
-    pthread_mutex_unlock(&mqtt_pool_mutex);
+    /* (The pool mutex was already released after critical section 2 above —
+       the stray second unlock that used to live here was undefined behavior.) */
     return 0;
 }
 
@@ -522,6 +578,7 @@ int mqtt_publish(const char* host, int port, const char* client_id,
         return -1;
     }
     int fd = conn->socket_fd;
+    tls_session_t* tls = (tls_session_t*)conn->tls;
     uint16_t packet_id = conn->packet_id++;
     pthread_mutex_unlock(&mqtt_pool_mutex);
 
@@ -531,7 +588,7 @@ int mqtt_publish(const char* host, int port, const char* client_id,
                                                qos, retain, packet_id);
 
     // Send PUBLISH packet (without the pool mutex held)
-    if (send(fd, publish_packet, packet_len, 0) < 0) {
+    if (mqtt_io_send(tls, fd, publish_packet, packet_len) < 0) {
         pthread_mutex_lock(&mqtt_pool_mutex);
         if (conn->socket_fd == fd) conn->is_connected = false;
         pthread_mutex_unlock(&mqtt_pool_mutex);
@@ -632,6 +689,7 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
         return -1;
     }
     int fd = conn->socket_fd;
+    tls_session_t* tls = (tls_session_t*)conn->tls;
     uint16_t packet_id = conn->packet_id++;
     pthread_mutex_unlock(&mqtt_pool_mutex);
 
@@ -640,7 +698,7 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
     int packet_len = mqtt_create_subscribe_packet(subscribe_packet, topic, qos, packet_id);
 
     // Send SUBSCRIBE packet (without the pool mutex held)
-    if (send(fd, subscribe_packet, packet_len, 0) < 0) {
+    if (mqtt_io_send(tls, fd, subscribe_packet, packet_len) < 0) {
         pthread_mutex_lock(&mqtt_pool_mutex);
         if (conn->socket_fd == fd) conn->is_connected = false;
         pthread_mutex_unlock(&mqtt_pool_mutex);
@@ -654,7 +712,7 @@ int mqtt_subscribe(const char* host, int port, const char* client_id,
 
     // Read SUBACK response (without the pool mutex held)
     char suback[5];
-    ssize_t recv_len = mqtt_recv_full(fd, suback, sizeof(suback));
+    ssize_t recv_len = mqtt_recv_full(tls, fd, suback, sizeof(suback));
     if (recv_len < 0) {
         pthread_mutex_lock(&mqtt_pool_mutex);
         if (conn->socket_fd == fd) conn->is_connected = false;
@@ -757,6 +815,7 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
         return -1;
     }
     int fd = conn->socket_fd;
+    tls_session_t* tls = (tls_session_t*)conn->tls;
     uint16_t packet_id = conn->packet_id++;
     pthread_mutex_unlock(&mqtt_pool_mutex);
 
@@ -765,7 +824,7 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
     int packet_len = mqtt_create_unsubscribe_packet(unsubscribe_packet, topic, packet_id);
 
     // Send UNSUBSCRIBE packet (without the pool mutex held)
-    if (send(fd, unsubscribe_packet, packet_len, 0) < 0) {
+    if (mqtt_io_send(tls, fd, unsubscribe_packet, packet_len) < 0) {
         pthread_mutex_lock(&mqtt_pool_mutex);
         if (conn->socket_fd == fd) conn->is_connected = false;
         pthread_mutex_unlock(&mqtt_pool_mutex);
@@ -779,7 +838,7 @@ int mqtt_unsubscribe(const char* host, int port, const char* client_id,
 
     // Read UNSUBACK response (without the pool mutex held)
     char unsuback[4];
-    ssize_t recv_len = mqtt_recv_full(fd, unsuback, sizeof(unsuback));
+    ssize_t recv_len = mqtt_recv_full(tls, fd, unsuback, sizeof(unsuback));
     if (recv_len < 0) {
         pthread_mutex_lock(&mqtt_pool_mutex);
         if (conn->socket_fd == fd) conn->is_connected = false;
@@ -842,11 +901,15 @@ int mqtt_disconnect(const char* host, int port, const char* client_id, response_
         return -1;
     }
 
-    // Send DISCONNECT packet
+    // Send DISCONNECT packet (through TLS when the session is wrapped)
     char disconnect_packet[2] = {MQTT_DISCONNECT, 0x00};
-    send(conn->socket_fd, disconnect_packet, 2, 0);
+    mqtt_io_send((tls_session_t*)conn->tls, conn->socket_fd, disconnect_packet, 2);
 
     // Close socket and mark as disconnected
+    if (conn->tls) {
+        tls_session_free((tls_session_t*)conn->tls);
+        conn->tls = NULL;
+    }
     close(conn->socket_fd);
     conn->is_connected = false;
     conn->socket_fd = -1;
@@ -867,7 +930,12 @@ void mqtt_cleanup_all(void) {
         if (mqtt_connections[i].socket_fd >= 0) {
             // Try to send DISCONNECT packet before closing
             char disconnect_packet[2] = {MQTT_DISCONNECT, 0x00};
-            send(mqtt_connections[i].socket_fd, disconnect_packet, 2, MSG_NOSIGNAL);
+            mqtt_io_send((tls_session_t*)mqtt_connections[i].tls,
+                         mqtt_connections[i].socket_fd, disconnect_packet, 2);
+            if (mqtt_connections[i].tls) {
+                tls_session_free((tls_session_t*)mqtt_connections[i].tls);
+                mqtt_connections[i].tls = NULL;
+            }
             close(mqtt_connections[i].socket_fd);
             mqtt_connections[i].socket_fd = -1;
         }

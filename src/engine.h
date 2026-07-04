@@ -131,15 +131,27 @@ typedef struct {
     } protocol_data;
 } response_t;
 
-// Legacy HTTP response structure (for backward compatibility)
+// Legacy HTTP response structure (for backward compatibility).
+// headers/body are heap-allocated (may be NULL when empty) and owned by the
+// response; release them with http_response_free(). Bodies are no longer
+// capped at MAX_BODY_LENGTH — they grow to the size of the actual response,
+// bounded only by HTTP_RESPONSE_BUFFER_MAX.
 typedef struct {
     int status_code;
-    char headers[MAX_HEADER_LENGTH];
-    char body[MAX_BODY_LENGTH];
+    char* headers;
+    char* body;
+    size_t body_len;
     uint64_t response_time_us;
     bool success;
     char error_message[256];
 } http_response_t;
+
+/* Hard safety cap for a single dynamically-grown HTTP response (body or
+   header block). A transfer exceeding it is aborted and marked failed. */
+#define HTTP_RESPONSE_BUFFER_MAX (256UL * 1024 * 1024)
+
+/* Release the heap buffers owned by an http_response_t (NULL-safe). */
+void http_response_free(http_response_t* response);
 
 #define HISTOGRAM_BUCKET_COUNT 10000  /* 1ms per bucket, covers 0-10s */
 #define HISTOGRAM_OVERFLOW_INDEX (HISTOGRAM_BUCKET_COUNT - 1)
@@ -193,8 +205,12 @@ int engine_database_disconnect(engine_t* engine, const char* connection_string, 
    fd-to-host lookup. */
 
 // MQTT Message Queue functions
-int engine_mqtt_connect(engine_t* engine, const char* host, int port, const char* client_id, 
+int engine_mqtt_connect(engine_t* engine, const char* host, int port, const char* client_id,
                        const char* username, const char* password, int keep_alive_seconds, response_t* response);
+/* TLS variant (mqtts, conventionally port 8883); see mqtt_connect_tls. */
+int engine_mqtt_connect_tls(engine_t* engine, const char* host, int port, const char* client_id,
+                            const char* username, const char* password, int keep_alive_seconds,
+                            bool use_tls, bool tls_verify, response_t* response);
 int engine_mqtt_publish(engine_t* engine, const char* host, int port, const char* client_id,
                        const char* topic, const char* message, int qos, bool retain, response_t* response);
 int engine_mqtt_subscribe(engine_t* engine, const char* host, int port, const char* client_id,

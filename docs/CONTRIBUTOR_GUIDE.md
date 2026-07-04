@@ -88,8 +88,8 @@ which both shared sockets between users and serialized the whole process.)
 | `src/protocols/tcp.c/.h` | TCP connection pool, connect/send/receive/disconnect. |
 | `src/protocols/udp.c/.h` | UDP endpoint pool, create/send/receive/close. |
 | `src/protocols/mqtt.c/.h` | Hand-rolled MQTT 3.1.1 packet encoder + connection pool. |
-| `src/protocols/websocket.c/.h` | **Simulated** WebSocket (no real handshake yet — see §7). |
-| `src/protocols/database.c/.h` | **Simulated** DB connector (parses connection strings, fakes query results). |
+| `src/protocols/websocket.c/.h` | **Real** RFC 6455 WebSocket via libcurl's WS API (`HAVE_CURL_WEBSOCKETS`); simulated fallback where libcurl lacks WS. |
+| `src/protocols/database.c/.h` | **Real** DB connectors: PostgreSQL (libpq), MySQL (libmysqlclient), MongoDB (libmongoc), each with a simulated fallback when its client lib is absent. |
 | `loadspiker/engine.py` | The `Engine` wrapper class + a pure-Python fallback used when the C extension is missing. |
 | `loadspiker/scenarios.py` | Scenario builders (HTTP/REST/Website/TCP/UDP/MQTT/Database/Mixed) and `${var}` substitution. |
 | `loadspiker/assertions.py`, `performance_assertions.py` | Response and aggregate-metric assertions. |
@@ -258,33 +258,34 @@ There are **two** build paths and they are not interchangeable:
 
 ## 8. Known gaps & refactor TODO
 
-Tracked, intentional debt. PRs welcome — each item links to the SECURITY_AUDIT
-where relevant.
+The live backlog now lives in **[TODO.md](TODO.md)** (consolidated Python + C
+audit + engineering items, with status). The items below were the gaps tracked at
+the time of the audit; they have since been resolved.
 
-### Functional gaps
-- [ ] **WebSocket is simulated.** `websocket.c` does `usleep`-based fake
-      handshakes/sends, no real frames. Implement RFC 6455 or wire libcurl’s
-      WebSocket API.
-- [ ] **Database is simulated.** `database.c` parses connection strings and
-      returns canned results; no real driver is linked.
-- [ ] **Binary payloads for TCP/UDP.** `tcp_send`/`udp_send` use `strlen(data)`,
-      so payloads with embedded NULs are truncated; the extension also marshals
-      data as a `str`. Add length-aware (`y#`) send paths. (SECURITY_AUDIT V6)
-- [ ] **Partial reads.** MQTT CONNACK/SUBACK reads are single `recv()` calls and
-      assume the whole control packet arrives at once. (SECURITY_AUDIT V8)
+### Functional gaps — resolved
+- [x] **WebSocket is real.** `websocket.c` does real RFC 6455 frames via libcurl’s
+      WebSocket API (`HAVE_CURL_WEBSOCKETS`), with the `usleep`-based simulation
+      kept only as a fallback where libcurl lacks WS support.
+- [x] **Database is real.** `database.c` links real drivers — PostgreSQL (libpq,
+      `HAVE_LIBPQ`), MySQL/MariaDB (libmysqlclient, `HAVE_MYSQL`), MongoDB
+      (libmongoc, `HAVE_MONGOC`) — each with a simulated fallback when its client
+      lib is absent. (Injection surface tracked as SECURITY_AUDIT V15.)
+- [x] **Binary payloads for TCP/UDP.** The extension marshals `data` with `s*`
+      (accepts `bytes`, carries length); `tcp_send`/`udp_send` take `size_t
+      data_len`, no `strlen`, so embedded NULs send in full. (SECURITY_AUDIT V6)
+- [x] **Partial reads.** MQTT CONNACK/SUBACK/UNSUBACK use a `mqtt_recv_full()`
+      read-to-length loop and reject short reads. (SECURITY_AUDIT V8)
 
-### Cleanups
-- [ ] **Dedup protocol pool boilerplate.** The find-or-create + pool-full logic
-      is copy-pasted across `tcp.c`, `udp.c`, `mqtt.c`. Extract a shared helper
-      or macro.
-- [ ] **`_run_with_ramp_up`** in `engine.py` re-runs `start_load_test` in 5 s
-      bursts with a `sleep(1)`; the ramp granularity is coarse. Consider driving
-      ramp inside the C core.
-- [ ] **Consolidate root-level `test_*.py` scripts.** ~17 ad-hoc scripts live in
-      the repo root alongside the real `tests/` suite. Fold the useful ones into
-      `tests/` and delete the rest.
-- [ ] **`websocket.c` uses `gettimeofday`** (wall clock) while everything else
-      uses `get_time_us()` (monotonic). Unify.
+### Cleanups — resolved
+- [x] **Dedup protocol pool boilerplate.** Extracted into
+      `src/protocols/pool_common.h` (`pool_reserve_full()` + `POOL_SLOT_MATCHES`);
+      tcp.c/udp.c/mqtt.c use it.
+- [x] **Coarse ramp-up driven in C.** Replaced the Python burst loop;
+      `engine_start_load_test` gained `ramp_up_seconds` with duration-sustained
+      workers self-gating on a staggered activation time.
+- [x] **Consolidated root-level `test_*.py` scripts.** The 14 ad-hoc root scripts
+      were removed; `tests/` is the authoritative suite.
+- [x] **`websocket.c` clock unified** to the shared monotonic `get_time_us()`.
 
 ### Done in this pass (for reference)
 - C extension now bridges **all** protocols (TCP/UDP/MQTT/Database) — previously

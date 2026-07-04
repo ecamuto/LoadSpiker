@@ -68,8 +68,8 @@
         <li>Python C extension (<code>python_extension.c</code>) with full HTTP API surface</li>
         <li>Worker thread pool (POSIX pthreads) with configurable concurrency</li>
         <li>Connection pool with per-handle CURL management</li>
-        <li>Multi-protocol architecture: WebSocket, TCP, UDP, MQTT, Database stubs</li>
-        <li>WebSocket support (Phase 1 simulation — connection overhead measurement)</li>
+        <li>Multi-protocol architecture: WebSocket, TCP, UDP, MQTT, Database (all bridged to Python)</li>
+        <li>WebSocket support: real RFC 6455 via libcurl's WS API (<code>HAVE_CURL_WEBSOCKETS</code>), simulated fallback where libcurl lacks WS</li>
         <li>MQTT C implementation: CONNECT, PUBLISH, SUBSCRIBE, DISCONNECT packets</li>
         <li>TCP C implementation: socket-based connect, send, receive, disconnect</li>
         <li>UDP C implementation: endpoint create, send, receive, close</li>
@@ -252,7 +252,7 @@
       <ul>
         <li>C engine core with libcurl HTTP/HTTPS support and connection pooling</li>
         <li>Python C extension with full API surface</li>
-        <li>Multi-protocol architecture (HTTP real, WebSocket/Database simulated)</li>
+        <li>Multi-protocol architecture (HTTP/TCP/UDP/MQTT real; WebSocket real via libcurl WS; Database real via libpq/libmysqlclient/libmongoc — each with a simulated fallback)</li>
         <li>Scenario API: Scenario, RESTAPIScenario, WebsiteScenario, MQTTScenario</li>
         <li>Assertion system: response assertions and performance assertions</li>
         <li>Session management with thread-safe SessionStore and request correlation</li>
@@ -267,8 +267,8 @@
       <!-- ===================== KNOWN ISSUES ===================== -->
       <h2 id="known-issues">Known Issues</h2>
 
-      <div class="callout warn">
-        <strong>Missing C Extension Protocol Bindings:</strong> TCP, UDP, MQTT, and Database C implementations exist and compile, but are not yet exposed as Python methods. Tests for these protocols are skipped automatically. Track progress in <a href="architecture.html#python-extension">Architecture: Python C Extension</a>.
+      <div class="callout info">
+        <strong>C Extension Protocol Bindings:</strong> TCP, UDP, MQTT, and Database are all exposed as Python methods in <code>python_extension.c</code> (alongside HTTP and WebSocket), and their test suites run rather than skip. See <a href="architecture.html#python-extension">Architecture: Python C Extension</a> for the exposed-method list.
       </div>
 
       <table>
@@ -281,29 +281,9 @@
         </thead>
         <tbody>
           <tr>
-            <td><code>python_extension.c</code></td>
-            <td>Bindings</td>
-            <td>TCP, UDP, MQTT, Database methods not exposed to Python</td>
-          </tr>
-          <tr>
-            <td><code>websocket.c</code></td>
-            <td>Protocol</td>
-            <td>Phase 1 simulation only — no real WS message exchange</td>
-          </tr>
-          <tr>
             <td><code>database.c</code></td>
             <td>Protocol</td>
-            <td>Simulated connection pool — no real DB driver integration</td>
-          </tr>
-          <tr>
-            <td><code>authentication.py</code></td>
-            <td>Analysis</td>
-            <td>Not yet included in CODE_ANALYSIS.md automated analysis pass</td>
-          </tr>
-          <tr>
-            <td><code>session_manager.py</code></td>
-            <td>Analysis</td>
-            <td>Not yet included in CODE_ANALYSIS.md automated analysis pass</td>
+            <td>SQL/NoSQL queries run verbatim (no parameter binding) — injection surface if built from untrusted input (SECURITY_AUDIT V15)</td>
           </tr>
           <tr>
             <td>All protocols</td>

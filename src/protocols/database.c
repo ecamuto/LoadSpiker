@@ -42,6 +42,29 @@ static pthread_mutex_t db_pool_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int db_pool_warned = 0;
 
 
+/* One-time per-backend warning when a simulated database operation actually
+   executes (client library absent at build time), so users can't mistake
+   synthetic numbers for a real load test. Plain static flags, same looseness
+   as pool_reserve_full() in pool_common.h. */
+static void database_warn_simulated(db_type_t type) {
+    static int warned[4] = {0, 0, 0, 0};
+    int idx;
+    const char* name;
+    switch (type) {
+        case DB_TYPE_POSTGRESQL: idx = 0; name = "PostgreSQL"; break;
+        case DB_TYPE_MYSQL:      idx = 1; name = "MySQL"; break;
+        case DB_TYPE_MONGODB:    idx = 2; name = "MongoDB"; break;
+        default:                 idx = 3; name = "Database"; break;
+    }
+    if (!warned[idx]) {
+        fprintf(stderr,
+                "[LoadSpiker] WARNING: %s running in SIMULATED mode "
+                "(client library not available at build time) — responses are "
+                "synthetic, no real database is contacted.\n", name);
+        warned[idx] = 1;
+    }
+}
+
 db_type_t database_parse_type(const char* db_type_str) {
     if (!db_type_str) return DB_TYPE_UNKNOWN;
 
@@ -525,6 +548,12 @@ int database_connect(const char* connection_string, const char* conn_id, const c
     }
 #endif
 
+    /* handle is still the sim placeholder when this backend's client library
+       was absent at build time — the "connection" is simulated. Warn once. */
+    if (handle == (void*)1) {
+        database_warn_simulated(db_type);
+    }
+
     /* --- Critical section 2: publish the live handle --- */
     pthread_mutex_lock(&db_pool_mutex);
     conn->is_connected = true;
@@ -603,7 +632,8 @@ int database_execute_query(const char* connection_string, const char* conn_id, c
 #endif
 
     // Simulate query execution based on query type
-    // (non-PostgreSQL types, or builds without libpq)
+    // (backends whose client library was absent at build time)
+    database_warn_simulated(conn_type);
 
     bool is_select = (strncasecmp(query, "SELECT", 6) == 0);
     bool is_insert = (strncasecmp(query, "INSERT", 6) == 0);

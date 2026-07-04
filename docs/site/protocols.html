@@ -191,7 +191,7 @@ results = engine.run_scenario(ws_scenario, users=100, duration=60)</code></pre>
       <h2 id="tcp">TCP</h2>
 
       <div class="callout info">
-        <strong>C Extension Required:</strong> TCP uses socket-based bindings in <code>tcp.c</code>. If these bindings are not yet exposed in the Python extension, calls will raise <code>AttributeError</code>. Check availability with the helper below before using in tests.
+        <strong>C Extension:</strong> TCP uses socket-based bindings in <code>tcp.c</code>, exposed to Python via <code>python_extension.c</code>. Real sockets on both the C engine and the pure-Python fallback. Check availability with the helper below.
       </div>
 
       <pre><code class="language-python">from loadspiker import Engine

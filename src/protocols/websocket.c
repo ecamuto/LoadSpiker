@@ -34,6 +34,22 @@ typedef struct {
 #endif
 } websocket_context_t;
 
+#ifndef HAVE_CURL_WEBSOCKETS
+/* One-time warning when a simulated WebSocket operation actually executes, so
+   users can't mistake synthetic numbers for a real load test. Plain static
+   flag, same looseness as pool_reserve_full() in pool_common.h. */
+static void websocket_warn_simulated(void) {
+    static int warned = 0;
+    if (!warned) {
+        fprintf(stderr,
+                "[LoadSpiker] WARNING: WebSocket running in SIMULATED mode "
+                "(libcurl lacks WebSocket support at build time) — responses are "
+                "synthetic, no real server is contacted.\n");
+        warned = 1;
+    }
+}
+#endif
+
 // Simple connection management
 #define MAX_WS_CONNECTIONS 1000
 static websocket_context_t* ws_connections[MAX_WS_CONNECTIONS] = {0};
@@ -141,6 +157,7 @@ int websocket_connect(const char* url, const char* subprotocol, response_t* resp
             sizeof(response->body) - 1);
 #else
     // Simulated handshake (libcurl built without WebSocket support)
+    websocket_warn_simulated();
     usleep(10000); // 10ms to simulate network
     ctx->connected = true;
     response->status_code = 101; // Switching Protocols
@@ -190,6 +207,7 @@ int websocket_send_message(const char* url, const char* message, response_t* res
     snprintf(response->body, sizeof(response->body), "Message sent: %zu bytes", sent);
 #else
     // Simulated send
+    websocket_warn_simulated();
     usleep(1000); // 1ms to simulate network
     ctx->messages_sent++;
     ctx->bytes_sent += message_len;
@@ -230,6 +248,7 @@ int websocket_close_connection(const char* url, response_t* response) {
     }
     strcpy(response->body, "WebSocket connection closed");
 #else
+    websocket_warn_simulated();
     usleep(5000); // 5ms to simulate network
     strcpy(response->body, "WebSocket connection closed (simulated)");
 #endif

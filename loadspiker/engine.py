@@ -292,6 +292,27 @@ class _PythonEngine:
                 'error_message': str(e)
             }
     
+    def get_capabilities(self) -> Dict[str, Any]:
+        """Report what this fallback engine actually does per protocol.
+
+        HTTP (requests), TCP and UDP (socket) are real; MQTT is simulated;
+        WebSocket and database operations are not implemented. TLS is True
+        because tcp_connect() supports ssl-wrapped connections.
+        """
+        return {
+            'http': 'real',
+            'tcp': 'real',
+            'udp': 'real',
+            'mqtt': 'simulated',
+            'websocket': 'not_implemented',
+            'database': {
+                'postgresql': 'not_implemented',
+                'mysql': 'not_implemented',
+                'mongodb': 'not_implemented',
+            },
+            'tls': True,
+        }
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get current metrics"""
         return self._metrics.copy()
@@ -1189,6 +1210,18 @@ class Engine:
             base = op.get("client_id", "loadspiker_client")
             op["client_id"] = f"{base}_u{user_id}"
         return op
+
+    def capabilities(self) -> Dict[str, Any]:
+        """Report the engine's per-protocol capabilities at runtime.
+
+        Returns a dict describing whether each protocol is "real" (actually
+        talks to a server), "simulated" (synthetic responses — no server is
+        contacted), or "not_implemented", plus a "tls" bool. For the C engine
+        this reflects the compile-time feature macros (HAVE_CURL_WEBSOCKETS,
+        HAVE_LIBPQ, HAVE_MYSQL, HAVE_MONGOC, HAVE_OPENSSL); simulated paths
+        also emit a one-time stderr warning when first exercised.
+        """
+        return self._engine.get_capabilities()
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get current performance metrics"""

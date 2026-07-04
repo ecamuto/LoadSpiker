@@ -53,6 +53,11 @@ or a **pure-Python fallback**. What each protocol actually does today:
 > `HAVE_LIBPQ` / `HAVE_OPENSSL` only when those are present. TLS is the one
 > feature that never degrades silently: `use_tls=True` on a build without
 > OpenSSL fails with an explicit error.
+> At runtime, `engine.capabilities()` reports the compiled state of every
+> protocol (`"real"` vs `"simulated"`, per database backend, plus a `tls`
+> bool), and any simulated path prints a one-time stderr warning the first
+> time it actually executes — so synthetic numbers can't silently pass for a
+> real load test.
 > Tracked in the [Contributor Guide](docs/CONTRIBUTOR_GUIDE.md#8-known-gaps--refactor-todo).
 
 ## Additional documentation

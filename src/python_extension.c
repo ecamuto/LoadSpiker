@@ -781,6 +781,55 @@ static PyObject* LoadTestEngine_reset_connection_pools(LoadTestEngineObject* sel
     Py_RETURN_NONE;
 }
 
+/* Report the compiled protocol capabilities so callers can tell at runtime
+   which protocols are real and which degrade to simulation. Values mirror the
+   HAVE_* feature macros set by setup.py at build time. */
+static PyObject* LoadTestEngine_get_capabilities(LoadTestEngineObject* self, PyObject* Py_UNUSED(ignored)) {
+    (void)self;
+    PyObject* caps = PyDict_New();
+    if (!caps) return NULL;
+    PyObject* db = PyDict_New();
+    if (!db) {
+        Py_DECREF(caps);
+        return NULL;
+    }
+
+    dict_set(caps, "http", PyUnicode_FromString("real"));
+    dict_set(caps, "tcp", PyUnicode_FromString("real"));
+    dict_set(caps, "udp", PyUnicode_FromString("real"));
+    dict_set(caps, "mqtt", PyUnicode_FromString("real"));
+#ifdef HAVE_CURL_WEBSOCKETS
+    dict_set(caps, "websocket", PyUnicode_FromString("real"));
+#else
+    dict_set(caps, "websocket", PyUnicode_FromString("simulated"));
+#endif
+
+#ifdef HAVE_LIBPQ
+    dict_set(db, "postgresql", PyUnicode_FromString("real"));
+#else
+    dict_set(db, "postgresql", PyUnicode_FromString("simulated"));
+#endif
+#ifdef HAVE_MYSQL
+    dict_set(db, "mysql", PyUnicode_FromString("real"));
+#else
+    dict_set(db, "mysql", PyUnicode_FromString("simulated"));
+#endif
+#ifdef HAVE_MONGOC
+    dict_set(db, "mongodb", PyUnicode_FromString("real"));
+#else
+    dict_set(db, "mongodb", PyUnicode_FromString("simulated"));
+#endif
+    dict_set(caps, "database", db); /* dict_set releases our ref to db */
+
+#ifdef HAVE_OPENSSL
+    dict_set(caps, "tls", PyBool_FromLong(1));
+#else
+    dict_set(caps, "tls", PyBool_FromLong(0));
+#endif
+
+    return caps;
+}
+
 static PyMethodDef LoadTestEngine_methods[] = {
     {"execute_request", KW_METH(LoadTestEngine_execute_request), "Execute a single HTTP request"},
     {"start_load_test", KW_METH(LoadTestEngine_start_load_test), "Start a load test with multiple requests"},
@@ -806,6 +855,7 @@ static PyMethodDef LoadTestEngine_methods[] = {
     {"database_query", KW_METH(LoadTestEngine_database_query), "Execute a database query"},
     {"database_disconnect", KW_METH(LoadTestEngine_database_disconnect), "Disconnect from a database"},
     {"reset_connection_pools", (PyCFunction)LoadTestEngine_reset_connection_pools, METH_NOARGS, "Reset all process-global protocol connection pools"},
+    {"get_capabilities", (PyCFunction)LoadTestEngine_get_capabilities, METH_NOARGS, "Report compiled protocol capabilities (real vs simulated)"},
     {NULL, NULL, 0, NULL}
 };
 

@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AddressSanitizer harness for the MQTT encoders (`make test-asan`, `tests/asan_check.c`)
 - Security regression tests (`tests/test_security_regressions.py`) and a GitHub Actions CI workflow
 - `Engine.reset_connection_pools()` to clear the process-global protocol pools
+- `Engine.capabilities()` runtime capability introspection (per-protocol `real`/`simulated`/`not_implemented` + `tls` bool, derived from the compile-time feature macros), and one-time stderr warnings when a simulated WebSocket or database operation actually executes — synthetic numbers can no longer pass silently for a real load test
 - All non-HTTP protocols (TCP/UDP/MQTT/Database) bridged through the Python extension
 
 ### Fixed
